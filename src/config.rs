@@ -40,6 +40,34 @@ pub struct Config {
     pub allow_prod_writes: bool,
 }
 
+/// Parse a boolean env flag strictly: only `1`/`true`/`yes`/`on` (case-insensitive,
+/// trimmed) enable it. `0`, `false`, `no`, empty, or anything else are false — so a
+/// value like `FLUTE_MCP_ALLOW_PROD_WRITES=false` does NOT enable production writes.
+fn truthy(value: Option<String>) -> bool {
+    match value {
+        Some(s) => matches!(
+            s.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        ),
+        None => false,
+    }
+}
+
+/// Whether `path` is a file we can execute. On Unix this checks the executable bit so
+/// a non-executable file is rejected at startup rather than failing on the first call.
+#[cfg(unix)]
+fn is_executable_file(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable_file(path: &std::path::Path) -> bool {
+    path.is_file()
+}
+
 impl Config {
     /// Build a Config from a closure that returns env vars (so tests can inject).
     pub fn from_env<F>(getenv: F) -> Result<Self, ConfigError>
@@ -68,7 +96,7 @@ impl Config {
         let binary = match getenv("FLUTE_BIN") {
             Some(p) if !p.is_empty() => {
                 let path = PathBuf::from(&p);
-                if !path.is_file() {
+                if !is_executable_file(&path) {
                     return Err(ConfigError::BinaryUnusable(p));
                 }
                 path
@@ -77,9 +105,8 @@ impl Config {
         };
 
         let merchant_id = getenv("FLUTE_MERCHANT_ID").filter(|s| !s.is_empty());
-        let debug = matches!(getenv("FLUTE_MCP_DEBUG").as_deref(), Some(v) if !v.is_empty());
-        let allow_prod_writes =
-            matches!(getenv("FLUTE_MCP_ALLOW_PROD_WRITES").as_deref(), Some(v) if !v.is_empty());
+        let debug = truthy(getenv("FLUTE_MCP_DEBUG"));
+        let allow_prod_writes = truthy(getenv("FLUTE_MCP_ALLOW_PROD_WRITES"));
 
         Ok(Self {
             profile,
@@ -157,6 +184,56 @@ mod tests {
         let cfg = Config::from_env(env).unwrap();
         assert_eq!(cfg.merchant_id.as_deref(), Some("m-123"));
         assert!(cfg.allow_prod_writes);
+    }
+
+    #[test]
+    fn false_like_values_do_not_enable_prod_writes() {
+        let dir = TempDir::new().unwrap();
+        let bin = fake_binary(&dir);
+        for value in ["false", "0", "no", "off", ""] {
+            let pairs = [
+                ("FLUTE_BIN", bin.to_str().unwrap()),
+                ("FLUTE_MCP_ALLOW_PROD_WRITES", value),
+            ];
+            let env = make_env(&pairs);
+            assert!(
+                !Config::from_env(env).unwrap().allow_prod_writes,
+                "value {value:?} must NOT enable production writes"
+            );
+        }
+    }
+
+    #[test]
+    fn truthy_values_enable_prod_writes() {
+        let dir = TempDir::new().unwrap();
+        let bin = fake_binary(&dir);
+        for value in ["1", "true", "TRUE", "yes", "on"] {
+            let pairs = [
+                ("FLUTE_BIN", bin.to_str().unwrap()),
+                ("FLUTE_MCP_ALLOW_PROD_WRITES", value),
+            ];
+            let env = make_env(&pairs);
+            assert!(
+                Config::from_env(env).unwrap().allow_prod_writes,
+                "value {value:?} must enable production writes"
+            );
+        }
+    }
+
+    #[test]
+    fn non_executable_binary_errors() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("flute");
+        std::fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o644); // present but not executable
+        std::fs::set_permissions(&path, perms).unwrap();
+        let pairs = [("FLUTE_BIN", path.to_str().unwrap())];
+        let env = make_env(&pairs);
+        assert!(matches!(
+            Config::from_env(env),
+            Err(ConfigError::BinaryUnusable(_))
+        ));
     }
 
     #[test]

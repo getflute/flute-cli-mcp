@@ -623,11 +623,11 @@ async fn pos_argv_has_no_wait() {
 }
 
 use flute_cli_mcp::tools::settlements::SettlementsList;
-use flute_cli_mcp::tools::subscriptions::SubscriptionCreate;
+use flute_cli_mcp::tools::subscriptions::{SubscriptionCreate, SubscriptionsList};
 
 #[tokio::test]
 async fn settlements_and_subscriptions_argv() {
-    let (srv, mock) = sandbox(2);
+    let (srv, mock) = sandbox(3);
     srv.settlements_list(Parameters(SettlementsList {
         status: Some("open".into()),
         ..Default::default()
@@ -639,6 +639,13 @@ async fn settlements_and_subscriptions_argv() {
         payment_method_id: "pm1".into(),
         amount: "9.99".into(),
         number_of_payments: 12,
+        ..Default::default()
+    }))
+    .await
+    .unwrap();
+    srv.subscriptions_list(Parameters(SubscriptionsList {
+        customer_id: Some("c1".into()),
+        status: Some("active".into()),
         ..Default::default()
     }))
     .await
@@ -674,6 +681,21 @@ async fn settlements_and_subscriptions_argv() {
             "9.99",
             "--number-of-payments",
             "12"
+        ])
+    );
+    assert_eq!(
+        c[2],
+        svec([
+            "--profile",
+            "sandbox",
+            "--output",
+            "json",
+            "subscriptions",
+            "list",
+            "--customer-id",
+            "c1",
+            "--status",
+            "active"
         ])
     );
 }
@@ -772,5 +794,70 @@ async fn tokens_revoke_argv() {
             "m-1",
             "--yes"
         ])
+    );
+}
+
+/// The production write guard must block a representative write from EVERY tool group,
+/// returning an error without spawning the CLI. The runner is seeded empty, so any
+/// write that slips past the guard and reaches `run_cli` panics the test.
+#[tokio::test]
+async fn production_blocks_a_write_in_every_group() {
+    let mock = MockRunner::new(vec![]);
+    let srv = FluteServer::new(cfg(Profile::Production, false, None), mock.clone());
+
+    let blocked = [
+        srv.transactions_sale(Parameters(SaleArgs {
+            amount: "1.00".into(),
+            ..Default::default()
+        }))
+        .await
+        .unwrap(),
+        srv.ach_debit(Parameters(AchMove {
+            amount: "1.00".into(),
+            ..Default::default()
+        }))
+        .await
+        .unwrap(),
+        srv.customers_create(Parameters(CustomerFields::default()))
+            .await
+            .unwrap(),
+        srv.devices_register(Parameters(DeviceRegister {
+            id: "d1".into(),
+            ..Default::default()
+        }))
+        .await
+        .unwrap(),
+        srv.pos_create(Parameters(PosCreate {
+            terminal_id: "t1".into(),
+            amount: "1.00".into(),
+            pos_device_id: "dev1".into(),
+            reference_id: "ref1".into(),
+            ..Default::default()
+        }))
+        .await
+        .unwrap(),
+        srv.subscriptions_create(Parameters(SubscriptionCreate {
+            customer_id: "c1".into(),
+            payment_method_id: "pm1".into(),
+            amount: "1.00".into(),
+            number_of_payments: 1,
+            ..Default::default()
+        }))
+        .await
+        .unwrap(),
+        srv.tokens_create(Parameters(TokenCreate {
+            name: "n".into(),
+            merchant_id: Some("m1".into()),
+        }))
+        .await
+        .unwrap(),
+    ];
+
+    for res in &blocked {
+        assert_eq!(res.is_error, Some(true));
+    }
+    assert!(
+        mock.calls().is_empty(),
+        "no write should reach the CLI on a guarded production instance"
     );
 }

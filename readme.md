@@ -39,8 +39,8 @@ flute-cli-mcp        # talks JSON-RPC over stdio
 | `FLUTE_BIN` | resolved on `PATH` | Override the `flute` binary location. |
 | `FLUTE_MERCHANT_ID` | unset | Pinned ISV merchant id (token tools; per-call `merchant_id` overrides). |
 | `FLUTE_MCP_TIMEOUT_SECS` | `30` | Per-call timeout for the child process. |
-| `FLUTE_MCP_DEBUG` | unset | Route `flute` stderr into this server's tracing. |
-| `FLUTE_MCP_ALLOW_PROD_WRITES` | unset | Lift the production write guard. |
+| `FLUTE_MCP_DEBUG` | off | Set to `1`/`true`/`yes`/`on` to route `flute` stderr into this server's tracing. |
+| `FLUTE_MCP_ALLOW_PROD_WRITES` | off | Set to `1`/`true`/`yes`/`on` to lift the production write guard. Any other value (including `false`/`0`/empty) keeps it on. |
 | `RUST_LOG` | `info` | tracing filter. Logs go to *stderr* only. |
 
 ## Claude Desktop config
@@ -73,6 +73,17 @@ Excluded by design: `auth login/logout/switch` (interactive/local-state), `updat
 ## Errors
 
 Every tool returns either a success result or `isError: true` with a structured JSON content item whose `kind` is one of `api`, `transport`, `auth`, `decode`, `client`, `spawn`, `timeout`, `bad_output`. Branch on `kind` first; `transport` and `api` with status ∈ {500,502,503,504} are safe to retry with backoff; `auth` means configure credentials on the operator's machine.
+
+## Security
+
+This server is a thin wrapper around the `flute` CLI, which accepts sensitive values — card number, CVV, bank routing and account numbers — as **command-line arguments**. While a tool call runs, those arguments are visible to other processes on the same host via process inspection (`ps`, `/proc/<pid>/cmdline`). Run this server only on a trusted host, under a dedicated user, and avoid passing real card/bank data on shared or multi-tenant machines. This exposure is inherent to the CLI's interface; eliminating it requires an upstream `flute` change to accept secrets via stdin or environment rather than flags.
+
+Other handling:
+
+- Credentials (`FLUTE_CLIENT_ID`/`FLUTE_CLIENT_SECRET`) are never read or logged by this server — they are simply inherited by the spawned `flute` process.
+- `auth_status` returns only `{authenticated, profile}`, never the token.
+- `tokens_create` surfaces a one-shot `clientSecret` from the API response; capture and store it securely (the API never returns it again).
+- On a non-JSON CLI failure, the raw output embedded in a `bad_output` error is truncated to 4 KiB so a large or sensitive body can't be echoed back wholesale.
 
 ## License
 

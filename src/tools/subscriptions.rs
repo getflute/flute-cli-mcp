@@ -19,6 +19,9 @@ pub struct SubscriptionsList {
     pub search: Option<String>,
     #[serde(default)]
     pub customer_id: Option<String>,
+    /// Client-side status filter (e.g. "active", "paused", "terminated").
+    #[serde(default)]
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
@@ -85,6 +88,9 @@ impl FluteServer {
         }
         if let Some(v) = p.customer_id {
             args.extend(["--customer-id".into(), v]);
+        }
+        if let Some(v) = p.status {
+            args.extend(["--status".into(), v]);
         }
         Ok(match self.run_cli(args).await {
             Ok(v) => value_to_result(v),

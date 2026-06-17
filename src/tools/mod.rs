@@ -33,6 +33,18 @@ pub(crate) fn value_to_result(value: Value) -> CallToolResult {
     ])
 }
 
+/// Truncate raw CLI output to at most 4 KiB on a UTF-8 char boundary before embedding
+/// it in an error payload, so a non-JSON failure body can't leak large or sensitive
+/// content back to the client or balloon the response.
+fn truncate_4k(s: &str) -> &str {
+    const MAX: usize = 4096;
+    if s.len() > MAX {
+        &s[..s.floor_char_boundary(MAX)]
+    } else {
+        s
+    }
+}
+
 pub(crate) fn flute_err_to_result(err: FluteError) -> CallToolResult {
     let payload = match &err {
         FluteError::Api {
@@ -65,18 +77,53 @@ pub(crate) fn flute_err_to_result(err: FluteError) -> CallToolResult {
             exit_code,
             stdout,
             stderr,
-        } => {
-            let stderr_trunc = if stderr.len() > 4096 {
-                &stderr[..stderr.floor_char_boundary(4096)]
-            } else {
-                stderr.as_str()
-            };
-            serde_json::json!({
-                "kind": "bad_output", "exit_code": exit_code, "stdout": stdout, "stderr": stderr_trunc,
-            })
-        }
+        } => serde_json::json!({
+            "kind": "bad_output",
+            "exit_code": exit_code,
+            "stdout": truncate_4k(stdout),
+            "stderr": truncate_4k(stderr),
+        }),
     };
     CallToolResult::error(vec![
         Content::json(payload).expect("serde_json::Value is always JSON-serializable"),
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_4k_passes_short_input_through() {
+        assert_eq!(truncate_4k("hello"), "hello");
+        assert_eq!(truncate_4k(""), "");
+    }
+
+    #[test]
+    fn truncate_4k_caps_long_ascii_at_4096() {
+        let big = "x".repeat(5000);
+        assert_eq!(truncate_4k(&big).len(), 4096);
+    }
+
+    #[test]
+    fn truncate_4k_respects_utf8_boundary() {
+        // 4095 ASCII bytes then a 2-byte char straddling index 4096:
+        // must cut back to 4095 rather than split the char.
+        let mut s = "a".repeat(4095);
+        s.push('é');
+        let out = truncate_4k(&s);
+        assert_eq!(out.len(), 4095);
+        assert!(s.is_char_boundary(out.len()));
+    }
+
+    #[test]
+    fn bad_output_payload_is_truncated_and_marked_error() {
+        let err = FluteError::BadOutput {
+            exit_code: 1,
+            stdout: "Z".repeat(10_000),
+            stderr: "E".repeat(10_000),
+        };
+        let result = flute_err_to_result(err);
+        assert_eq!(result.is_error, Some(true));
+    }
 }
