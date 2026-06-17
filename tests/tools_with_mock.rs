@@ -256,7 +256,7 @@ async fn prod_allows_reads() {
 }
 
 use flute_cli_mcp::tools::customers::{
-    AddCard, CustomerFields, CustomerUpdate, CustomersList, RemoveMethod,
+    AddAch, AddCard, CustomerFields, CustomerUpdate, CustomersList, RemoveMethod,
 };
 
 #[tokio::test]
@@ -347,7 +347,71 @@ async fn customers_argv() {
             "--yes"
         ])
     );
-    let _ = AddCard::default(); // keep import used if add-card test added later
+}
+
+#[tokio::test]
+async fn customers_add_methods_argv() {
+    let (srv, mock) = sandbox(2);
+    srv.customers_add_card(Parameters(AddCard {
+        id: "c1".into(),
+        card: "4111111111111111".into(),
+        exp: "12/27".into(),
+        cvv: "123".into(),
+        name: Some("Ann B".into()),
+    }))
+    .await
+    .unwrap();
+    srv.customers_add_ach(Parameters(AddAch {
+        id: "c1".into(),
+        routing: "021000021".into(),
+        account: "123456789".into(),
+        account_type: "checking".into(),
+        account_holder_type: "personal".into(),
+        ..Default::default()
+    }))
+    .await
+    .unwrap();
+    let c = mock.calls();
+    assert_eq!(
+        c[0],
+        svec([
+            "--profile",
+            "sandbox",
+            "--output",
+            "json",
+            "customers",
+            "add-card",
+            "c1",
+            "--card",
+            "4111111111111111",
+            "--exp",
+            "12/27",
+            "--cvv",
+            "123",
+            "--name",
+            "Ann B"
+        ])
+    );
+    assert_eq!(
+        c[1],
+        svec([
+            "--profile",
+            "sandbox",
+            "--output",
+            "json",
+            "customers",
+            "add-ach",
+            "c1",
+            "--routing",
+            "021000021",
+            "--account",
+            "123456789",
+            "--account-type",
+            "checking",
+            "--account-holder-type",
+            "personal"
+        ])
+    );
 }
 
 use flute_cli_mcp::tools::devices::{DeviceId, DeviceRegister};
@@ -682,5 +746,31 @@ async fn tokens_create_errors_without_any_merchant_id() {
         .unwrap();
     assert_eq!(res.is_error, Some(true));
     assert!(mock.calls().is_empty());
-    let _ = TokenRevoke::default();
+}
+
+#[tokio::test]
+async fn tokens_revoke_argv() {
+    let (srv, mock) = sandbox(1);
+    srv.tokens_revoke(Parameters(TokenRevoke {
+        client_id: "cid-1".into(),
+        merchant_id: Some("m-1".into()),
+    }))
+    .await
+    .unwrap();
+    assert_eq!(
+        mock.calls()[0],
+        svec([
+            "--profile",
+            "sandbox",
+            "--output",
+            "json",
+            "tokens",
+            "revoke",
+            "--client-id",
+            "cid-1",
+            "--merchant-id",
+            "m-1",
+            "--yes"
+        ])
+    );
 }
