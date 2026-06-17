@@ -135,6 +135,22 @@ async fn customers_argv() {
     let _ = AddCard::default(); // keep import used if add-card test added later
 }
 
+use flute_cli_mcp::tools::devices::{DeviceId, DeviceRegister};
+
+#[tokio::test]
+async fn terminals_and_devices_argv() {
+    let (srv, mock) = sandbox(4);
+    srv.terminals_status(Parameters(flute_cli_mcp::tools::Id { id: "term1".into() })).await.unwrap();
+    srv.devices_list(Parameters(flute_cli_mcp::tools::Empty {})).await.unwrap();
+    srv.devices_ttp_jwt(Parameters(DeviceId { device_id: "d1".into() })).await.unwrap();
+    srv.devices_register(Parameters(DeviceRegister { id: "d1".into(), name: Some("Lane 1".into()) })).await.unwrap();
+    let c = mock.calls();
+    assert_eq!(c[0], svec(["--profile","sandbox","--output","json","terminals","status","term1"]));
+    assert_eq!(c[1], svec(["--profile","sandbox","--output","json","devices","list"]));
+    assert_eq!(c[2], svec(["--profile","sandbox","--output","json","devices","ttp-jwt","--device-id","d1"]));
+    assert_eq!(c[3], svec(["--profile","sandbox","--output","json","devices","register","d1","--name","Lane 1"]));
+}
+
 use flute_cli_mcp::tools::ach::AchMove;
 
 #[tokio::test]

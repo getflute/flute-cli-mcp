@@ -8,6 +8,8 @@ pub mod util;
 pub mod transactions;
 pub mod ach;
 pub mod customers;
+pub mod terminals;
+pub mod devices;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]

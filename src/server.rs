@@ -24,7 +24,7 @@ impl FluteServer {
     pub fn new(config: Arc<Config>, runner: Arc<dyn CliRunner>) -> Self {
         // Each group module contributes a router via `#[tool_router(router = …)]`.
         // Extend this chain as group modules are added (Tasks 6–12).
-        let tool_router = Self::util_router() + Self::transactions_router() + Self::ach_router() + Self::customers_router();
+        let tool_router = Self::util_router() + Self::transactions_router() + Self::ach_router() + Self::customers_router() + Self::terminals_router() + Self::devices_router();
         Self { config, runner, tool_router }
     }
 
