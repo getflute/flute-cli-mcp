@@ -7,6 +7,7 @@ use crate::error::FluteError;
 pub mod util;
 pub mod transactions;
 pub mod ach;
+pub mod customers;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]

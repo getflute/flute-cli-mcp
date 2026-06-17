@@ -118,6 +118,23 @@ async fn prod_allows_reads() {
     assert_eq!(mock.calls().len(), 1);
 }
 
+use flute_cli_mcp::tools::customers::{AddCard, CustomerFields, CustomerUpdate, CustomersList, RemoveMethod};
+
+#[tokio::test]
+async fn customers_argv() {
+    let (srv, mock) = sandbox(4);
+    srv.customers_list(Parameters(CustomersList { search: Some("ann".into()), ..Default::default() })).await.unwrap();
+    srv.customers_create(Parameters(CustomerFields { first_name: Some("Ann".into()), email: Some("a@b.com".into()), ..Default::default() })).await.unwrap();
+    srv.customers_update(Parameters(CustomerUpdate { id: "c1".into(), fields: CustomerFields { mobile: Some("5551234".into()), ..Default::default() } })).await.unwrap();
+    srv.customers_remove_method(Parameters(RemoveMethod { id: "c1".into(), method_id: "m9".into() })).await.unwrap();
+    let c = mock.calls();
+    assert_eq!(c[0], svec(["--profile","sandbox","--output","json","customers","list","--search","ann"]));
+    assert_eq!(c[1], svec(["--profile","sandbox","--output","json","customers","create","--first-name","Ann","--email","a@b.com"]));
+    assert_eq!(c[2], svec(["--profile","sandbox","--output","json","customers","update","c1","--mobile","5551234"]));
+    assert_eq!(c[3], svec(["--profile","sandbox","--output","json","customers","remove-method","c1","m9","--yes"]));
+    let _ = AddCard::default(); // keep import used if add-card test added later
+}
+
 use flute_cli_mcp::tools::ach::AchMove;
 
 #[tokio::test]
