@@ -117,3 +117,29 @@ async fn prod_allows_reads() {
     srv.transactions_list(Parameters(TransactionsList::default())).await.unwrap();
     assert_eq!(mock.calls().len(), 1);
 }
+
+use flute_cli_mcp::tools::ach::AchMove;
+
+#[tokio::test]
+async fn ach_debit_argv() {
+    let (srv, mock) = sandbox(1);
+    srv.ach_debit(Parameters(AchMove {
+        amount: "25.00".into(), payment_processor_id: "pp1".into(),
+        routing: "021000021".into(), account: "123456789".into(),
+        account_type: "checking".into(), account_holder_type: "personal".into(),
+        billing_line1: "1 Main St".into(), billing_city: "Austin".into(),
+        billing_state: "TX".into(), billing_state_id: 44, billing_postal_code: "78701".into(),
+        contact_first_name: "A".into(), contact_last_name: "B".into(),
+        contact_email: "a@b.com".into(), contact_phone: "5125551234".into(),
+        ..Default::default()
+    })).await.unwrap();
+    assert_eq!(mock.calls()[0], svec([
+        "--profile","sandbox","--output","json","ach","debit",
+        "--amount","25.00","--payment-processor-id","pp1","--routing","021000021","--account","123456789",
+        "--account-type","checking","--account-holder-type","personal",
+        "--billing-line1","1 Main St","--billing-city","Austin","--billing-state","TX",
+        "--billing-state-id","44","--billing-postal-code","78701","--billing-country-id","1",
+        "--contact-first-name","A","--contact-last-name","B","--contact-email","a@b.com","--contact-phone","5125551234",
+        "--sec-code","1","--requester-ip","127.0.0.1",
+    ]));
+}

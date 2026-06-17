@@ -6,6 +6,7 @@ use crate::error::FluteError;
 
 pub mod util;
 pub mod transactions;
+pub mod ach;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
