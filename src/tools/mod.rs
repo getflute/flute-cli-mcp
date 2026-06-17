@@ -11,6 +11,8 @@ pub mod customers;
 pub mod terminals;
 pub mod devices;
 pub mod pos;
+pub mod settlements;
+pub mod subscriptions;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]

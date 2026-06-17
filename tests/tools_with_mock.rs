@@ -192,3 +192,19 @@ async fn pos_argv_has_no_wait() {
     assert_eq!(c[1], svec(["--profile","sandbox","--output","json","pos","create","--terminal-id","term1","--amount","10.00","--pos-device-id","dev1","--reference-id","ref-1"]));
     assert!(!c[1].iter().any(|a| a == "--wait"), "pos_create must not pass --wait");
 }
+
+use flute_cli_mcp::tools::settlements::SettlementsList;
+use flute_cli_mcp::tools::subscriptions::SubscriptionCreate;
+
+#[tokio::test]
+async fn settlements_and_subscriptions_argv() {
+    let (srv, mock) = sandbox(2);
+    srv.settlements_list(Parameters(SettlementsList { status: Some("open".into()), ..Default::default() })).await.unwrap();
+    srv.subscriptions_create(Parameters(SubscriptionCreate {
+        customer_id: "c1".into(), payment_method_id: "pm1".into(),
+        amount: "9.99".into(), number_of_payments: 12, ..Default::default()
+    })).await.unwrap();
+    let c = mock.calls();
+    assert_eq!(c[0], svec(["--profile","sandbox","--output","json","settlements","list","--status","open"]));
+    assert_eq!(c[1], svec(["--profile","sandbox","--output","json","subscriptions","create","--customer-id","c1","--payment-method-id","pm1","--amount","9.99","--number-of-payments","12"]));
+}
