@@ -176,3 +176,19 @@ async fn ach_debit_argv() {
         "--sec-code","1","--requester-ip","127.0.0.1",
     ]));
 }
+
+use flute_cli_mcp::tools::pos::{PosCreate, PosList};
+
+#[tokio::test]
+async fn pos_argv_has_no_wait() {
+    let (srv, mock) = sandbox(2);
+    srv.pos_list(Parameters(PosList { terminal_id: Some("term1".into()), ..Default::default() })).await.unwrap();
+    srv.pos_create(Parameters(PosCreate {
+        terminal_id: "term1".into(), amount: "10.00".into(),
+        pos_device_id: "dev1".into(), reference_id: "ref-1".into(), ..Default::default()
+    })).await.unwrap();
+    let c = mock.calls();
+    assert_eq!(c[0], svec(["--profile","sandbox","--output","json","pos","list","--terminal-id","term1"]));
+    assert_eq!(c[1], svec(["--profile","sandbox","--output","json","pos","create","--terminal-id","term1","--amount","10.00","--pos-device-id","dev1","--reference-id","ref-1"]));
+    assert!(!c[1].iter().any(|a| a == "--wait"), "pos_create must not pass --wait");
+}
