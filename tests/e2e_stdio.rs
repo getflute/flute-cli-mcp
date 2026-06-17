@@ -21,11 +21,18 @@ fn write_fake_flute(dir: &TempDir, stdout: &str, exit_code: i32) -> std::path::P
 }
 
 fn jsonrpc(id: u64, method: &str, params: Value) -> String {
-    format!("{}\n", serde_json::to_string(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params})).unwrap())
+    format!(
+        "{}\n",
+        serde_json::to_string(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
+            .unwrap()
+    )
 }
 
 fn jsonrpc_notify(method: &str, params: Value) -> String {
-    format!("{}\n", serde_json::to_string(&json!({"jsonrpc":"2.0","method":method,"params":params})).unwrap())
+    format!(
+        "{}\n",
+        serde_json::to_string(&json!({"jsonrpc":"2.0","method":method,"params":params})).unwrap()
+    )
 }
 
 fn read_one_frame(reader: &mut BufReader<impl std::io::Read>) -> Value {
@@ -54,7 +61,9 @@ fn handshake(stdin: &mut impl Write, reader: &mut BufReader<impl std::io::Read>)
     let init = read_one_frame(reader);
     assert_eq!(init["id"], 1);
     assert!(init["result"].is_object());
-    stdin.write_all(jsonrpc_notify("notifications/initialized", json!({})).as_bytes()).unwrap();
+    stdin
+        .write_all(jsonrpc_notify("notifications/initialized", json!({})).as_bytes())
+        .unwrap();
 }
 
 #[test]
@@ -68,13 +77,17 @@ fn lists_all_tools_and_calls_a_read() {
     handshake(&mut stdin, &mut reader);
 
     // tools/list — expect 47 tools.
-    stdin.write_all(jsonrpc(2, "tools/list", json!({})).as_bytes()).unwrap();
+    stdin
+        .write_all(jsonrpc(2, "tools/list", json!({})).as_bytes())
+        .unwrap();
     let listed = read_one_frame(&mut reader);
     let tools = listed["result"]["tools"].as_array().expect("tools array");
     assert_eq!(tools.len(), 47, "expected 47 tools, got {}", tools.len());
 
     // tools/call ping — fake returns success JSON.
-    stdin.write_all(jsonrpc(3, "tools/call", json!({"name":"ping","arguments":{}})).as_bytes()).unwrap();
+    stdin
+        .write_all(jsonrpc(3, "tools/call", json!({"name":"ping","arguments":{}})).as_bytes())
+        .unwrap();
     let called = read_one_frame(&mut reader);
     assert_eq!(called["id"], 3);
     assert_ne!(called["result"]["isError"], json!(true));
@@ -93,10 +106,21 @@ fn surfaces_auth_error_kind() {
 
     handshake(&mut stdin, &mut reader);
 
-    stdin.write_all(jsonrpc(2, "tools/call", json!({"name":"transactions_list","arguments":{}})).as_bytes()).unwrap();
+    stdin
+        .write_all(
+            jsonrpc(
+                2,
+                "tools/call",
+                json!({"name":"transactions_list","arguments":{}}),
+            )
+            .as_bytes(),
+        )
+        .unwrap();
     let called = read_one_frame(&mut reader);
     assert_eq!(called["result"]["isError"], json!(true));
-    let text = called["result"]["content"][0]["text"].as_str().expect("text content");
+    let text = called["result"]["content"][0]["text"]
+        .as_str()
+        .expect("text content");
     let payload: Value = serde_json::from_str(text).expect("parse error payload");
     assert_eq!(payload["kind"], "auth");
 
@@ -116,13 +140,29 @@ fn production_blocks_a_write_without_spawning() {
 
     handshake(&mut stdin, &mut reader);
 
-    stdin.write_all(jsonrpc(2, "tools/call", json!({"name":"transactions_sale","arguments":{"amount":"1.00"}})).as_bytes()).unwrap();
+    stdin
+        .write_all(
+            jsonrpc(
+                2,
+                "tools/call",
+                json!({"name":"transactions_sale","arguments":{"amount":"1.00"}}),
+            )
+            .as_bytes(),
+        )
+        .unwrap();
     let called = read_one_frame(&mut reader);
     assert_eq!(called["result"]["isError"], json!(true));
-    let text = called["result"]["content"][0]["text"].as_str().expect("text content");
+    let text = called["result"]["content"][0]["text"]
+        .as_str()
+        .expect("text content");
     let payload: Value = serde_json::from_str(text).expect("parse error payload");
     assert_eq!(payload["kind"], "client");
-    assert!(payload["message"].as_str().unwrap().contains("FLUTE_MCP_ALLOW_PROD_WRITES"));
+    assert!(
+        payload["message"]
+            .as_str()
+            .unwrap()
+            .contains("FLUTE_MCP_ALLOW_PROD_WRITES")
+    );
 
     drop(stdin);
     let _ = child.wait();

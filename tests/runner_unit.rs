@@ -18,7 +18,11 @@ fn fake(dir: &TempDir, body: &str) -> PathBuf {
 }
 
 fn runner(bin: PathBuf, secs: u64) -> ProcessRunner {
-    ProcessRunner { binary: bin, timeout: Duration::from_secs(secs), debug: false }
+    ProcessRunner {
+        binary: bin,
+        timeout: Duration::from_secs(secs),
+        debug: false,
+    }
 }
 
 #[tokio::test]
@@ -45,7 +49,9 @@ async fn api_envelope_on_nonzero_exit() {
         "#!/bin/sh\nprintf '{\"kind\":\"api\",\"message\":\"nope\",\"status\":404}'\nexit 4\n",
     );
     match runner(bin, 5).run(&["x".into()]).await {
-        Err(FluteError::Api { status, message, .. }) => {
+        Err(FluteError::Api {
+            status, message, ..
+        }) => {
             assert_eq!(status, 404);
             assert_eq!(message, "nope");
         }
@@ -66,7 +72,10 @@ async fn unparseable_nonzero_is_bad_output() {
 #[tokio::test]
 async fn missing_binary_is_spawn_error() {
     let r = runner(PathBuf::from("/no/such/flute"), 5);
-    assert!(matches!(r.run(&["x".into()]).await, Err(FluteError::Spawn(_))));
+    assert!(matches!(
+        r.run(&["x".into()]).await,
+        Err(FluteError::Spawn(_))
+    ));
 }
 
 #[tokio::test]
@@ -78,5 +87,8 @@ async fn hung_child_times_out() {
         timeout: Duration::from_millis(200),
         debug: false,
     };
-    assert!(matches!(r.run(&["x".into()]).await, Err(FluteError::Timeout { .. })));
+    assert!(matches!(
+        r.run(&["x".into()]).await,
+        Err(FluteError::Timeout { .. })
+    ));
 }

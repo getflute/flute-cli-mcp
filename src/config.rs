@@ -55,7 +55,9 @@ impl Config {
         let timeout = match getenv("FLUTE_MCP_TIMEOUT_SECS") {
             None => Duration::from_secs(30),
             Some(s) => {
-                let n: u64 = s.parse().map_err(|_| ConfigError::InvalidTimeout(s.clone()))?;
+                let n: u64 = s
+                    .parse()
+                    .map_err(|_| ConfigError::InvalidTimeout(s.clone()))?;
                 if n == 0 {
                     return Err(ConfigError::InvalidTimeout(s));
                 }
@@ -98,8 +100,10 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_env<'a>(pairs: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
-        let map: HashMap<String, String> =
-            pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let map: HashMap<String, String> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
         move |k| map.get(k).cloned()
     }
 
@@ -131,7 +135,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let bin = fake_binary(&dir);
         for value in ["production", "prod"] {
-            let pairs = [("FLUTE_BIN", bin.to_str().unwrap()), ("FLUTE_PROFILE", value)];
+            let pairs = [
+                ("FLUTE_BIN", bin.to_str().unwrap()),
+                ("FLUTE_PROFILE", value),
+            ];
             let env = make_env(&pairs);
             assert_eq!(Config::from_env(env).unwrap().profile, Profile::Production);
         }
@@ -156,14 +163,22 @@ mod tests {
     fn rejects_unknown_profile() {
         let dir = TempDir::new().unwrap();
         let bin = fake_binary(&dir);
-        let pairs = [("FLUTE_BIN", bin.to_str().unwrap()), ("FLUTE_PROFILE", "staging")];
+        let pairs = [
+            ("FLUTE_BIN", bin.to_str().unwrap()),
+            ("FLUTE_PROFILE", "staging"),
+        ];
         let env = make_env(&pairs);
-        assert!(matches!(Config::from_env(env), Err(ConfigError::InvalidProfile(s)) if s == "staging"));
+        assert!(
+            matches!(Config::from_env(env), Err(ConfigError::InvalidProfile(s)) if s == "staging")
+        );
     }
 
     #[test]
     fn missing_binary_errors() {
         let env = make_env(&[("FLUTE_BIN", "/nope/does/not/exist")]);
-        assert!(matches!(Config::from_env(env), Err(ConfigError::BinaryUnusable(_))));
+        assert!(matches!(
+            Config::from_env(env),
+            Err(ConfigError::BinaryUnusable(_))
+        ));
     }
 }

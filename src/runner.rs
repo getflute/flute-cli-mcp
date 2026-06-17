@@ -73,7 +73,11 @@ impl CliRunner for ProcessRunner {
         let output = match timeout(self.timeout, child.wait_with_output()).await {
             Ok(Ok(out)) => out,
             Ok(Err(e)) => return Err(FluteError::Spawn(e.to_string())),
-            Err(_) => return Err(FluteError::Timeout { secs: self.timeout.as_secs() }),
+            Err(_) => {
+                return Err(FluteError::Timeout {
+                    secs: self.timeout.as_secs(),
+                });
+            }
         };
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -93,7 +97,9 @@ impl CliRunner for ProcessRunner {
                 message: format!("could not parse stdout as JSON: {e}"),
             })
         } else {
-            Err(FluteError::from_envelope_stdout(exit_code, &stdout, &stderr))
+            Err(FluteError::from_envelope_stdout(
+                exit_code, &stdout, &stderr,
+            ))
         }
     }
 }

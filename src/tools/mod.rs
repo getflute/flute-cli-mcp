@@ -4,16 +4,16 @@ use serde_json::Value;
 
 use crate::error::FluteError;
 
-pub mod util;
-pub mod transactions;
 pub mod ach;
 pub mod customers;
-pub mod terminals;
 pub mod devices;
 pub mod pos;
 pub mod settlements;
 pub mod subscriptions;
+pub mod terminals;
 pub mod tokens;
+pub mod transactions;
+pub mod util;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -35,15 +35,25 @@ pub(crate) fn value_to_result(value: Value) -> CallToolResult {
 
 pub(crate) fn flute_err_to_result(err: FluteError) -> CallToolResult {
     let payload = match &err {
-        FluteError::Api { status, message, correlation_id } => serde_json::json!({
+        FluteError::Api {
+            status,
+            message,
+            correlation_id,
+        } => serde_json::json!({
             "kind": "api", "status": status, "message": message, "correlation_id": correlation_id,
         }),
-        FluteError::Transport { message } => serde_json::json!({ "kind": "transport", "message": message }),
+        FluteError::Transport { message } => {
+            serde_json::json!({ "kind": "transport", "message": message })
+        }
         FluteError::Auth { message } => serde_json::json!({
             "kind": "auth", "message": format!("{message} — run `flute auth login`"),
         }),
-        FluteError::Decode { message } => serde_json::json!({ "kind": "decode", "message": message }),
-        FluteError::Client { message } => serde_json::json!({ "kind": "client", "message": message }),
+        FluteError::Decode { message } => {
+            serde_json::json!({ "kind": "decode", "message": message })
+        }
+        FluteError::Client { message } => {
+            serde_json::json!({ "kind": "client", "message": message })
+        }
         FluteError::Spawn(msg) => serde_json::json!({
             "kind": "spawn",
             "message": format!("could not spawn flute — set FLUTE_BIN or install the CLI ({msg})"),
@@ -51,7 +61,11 @@ pub(crate) fn flute_err_to_result(err: FluteError) -> CallToolResult {
         FluteError::Timeout { secs } => serde_json::json!({
             "kind": "timeout", "message": format!("flute timed out after {secs}s"),
         }),
-        FluteError::BadOutput { exit_code, stdout, stderr } => {
+        FluteError::BadOutput {
+            exit_code,
+            stdout,
+            stderr,
+        } => {
             let stderr_trunc = if stderr.len() > 4096 {
                 &stderr[..stderr.floor_char_boundary(4096)]
             } else {

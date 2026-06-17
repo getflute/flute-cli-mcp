@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use rmcp::{
-    ServerHandler,
-    handler::server::router::tool::ToolRouter,
-    model::ServerInfo,
-    tool_handler,
+    ServerHandler, handler::server::router::tool::ToolRouter, model::ServerInfo, tool_handler,
 };
 use serde_json::Value;
 
@@ -24,8 +21,21 @@ impl FluteServer {
     pub fn new(config: Arc<Config>, runner: Arc<dyn CliRunner>) -> Self {
         // Each group module contributes a router via `#[tool_router(router = …)]`.
         // Extend this chain as group modules are added (Tasks 6–12).
-        let tool_router = Self::util_router() + Self::transactions_router() + Self::ach_router() + Self::customers_router() + Self::terminals_router() + Self::devices_router() + Self::pos_router() + Self::settlements_router() + Self::subscriptions_router() + Self::tokens_router();
-        Self { config, runner, tool_router }
+        let tool_router = Self::util_router()
+            + Self::transactions_router()
+            + Self::ach_router()
+            + Self::customers_router()
+            + Self::terminals_router()
+            + Self::devices_router()
+            + Self::pos_router()
+            + Self::settlements_router()
+            + Self::subscriptions_router()
+            + Self::tokens_router();
+        Self {
+            config,
+            runner,
+            tool_router,
+        }
     }
 
     pub(crate) fn base_args(&self) -> Vec<String> {
@@ -57,7 +67,10 @@ impl FluteServer {
 
     /// Resolve the merchant id for token tools: per-call override, else the
     /// pinned `FLUTE_MERCHANT_ID`, else a `client` error.
-    pub(crate) fn merchant_id_for(&self, override_id: Option<String>) -> Result<String, FluteError> {
+    pub(crate) fn merchant_id_for(
+        &self,
+        override_id: Option<String>,
+    ) -> Result<String, FluteError> {
         override_id
             .filter(|s| !s.is_empty())
             .or_else(|| self.config.merchant_id.clone())

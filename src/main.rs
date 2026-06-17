@@ -10,7 +10,10 @@ use rmcp::{ServiceExt, transport::io::stdio};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
-#[command(name = "flute-cli-mcp", about = "MCP server for the flute payments CLI")]
+#[command(
+    name = "flute-cli-mcp",
+    about = "MCP server for the flute payments CLI"
+)]
 struct Args {
     /// Override `FLUTE_PROFILE` (sandbox | production).
     #[arg(long, env = "FLUTE_PROFILE")]
@@ -23,7 +26,9 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .with_writer(std::io::stderr)
         .init();
 

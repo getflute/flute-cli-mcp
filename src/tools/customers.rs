@@ -77,90 +77,214 @@ pub struct RemoveMethod {
 
 impl FluteServer {
     fn customer_field_args(args: &mut Vec<String>, f: CustomerFields) {
-        if let Some(v) = f.first_name { args.extend(["--first-name".into(), v]); }
-        if let Some(v) = f.last_name { args.extend(["--last-name".into(), v]); }
-        if let Some(v) = f.email { args.extend(["--email".into(), v]); }
-        if let Some(v) = f.company { args.extend(["--company".into(), v]); }
-        if let Some(v) = f.mobile { args.extend(["--mobile".into(), v]); }
+        if let Some(v) = f.first_name {
+            args.extend(["--first-name".into(), v]);
+        }
+        if let Some(v) = f.last_name {
+            args.extend(["--last-name".into(), v]);
+        }
+        if let Some(v) = f.email {
+            args.extend(["--email".into(), v]);
+        }
+        if let Some(v) = f.company {
+            args.extend(["--company".into(), v]);
+        }
+        if let Some(v) = f.mobile {
+            args.extend(["--mobile".into(), v]);
+        }
     }
 }
 
 #[tool_router(router = customers_router, vis = "pub(crate)")]
 impl FluteServer {
     #[tool(description = "Get a customer by id. Safe to retry.")]
-    pub async fn customers_get(&self, Parameters(p): Parameters<Id>) -> Result<CallToolResult, McpError> {
+    pub async fn customers_get(
+        &self,
+        Parameters(p): Parameters<Id>,
+    ) -> Result<CallToolResult, McpError> {
         let mut args = self.base_args();
         args.extend(["customers".into(), "get".into(), p.id]);
-        Ok(match self.run_cli(args).await { Ok(v) => value_to_result(v), Err(e) => flute_err_to_result(e) })
+        Ok(match self.run_cli(args).await {
+            Ok(v) => value_to_result(v),
+            Err(e) => flute_err_to_result(e),
+        })
     }
 
     #[tool(description = "List customers. --search is a real server param. Safe to retry.")]
-    pub async fn customers_list(&self, Parameters(p): Parameters<CustomersList>) -> Result<CallToolResult, McpError> {
+    pub async fn customers_list(
+        &self,
+        Parameters(p): Parameters<CustomersList>,
+    ) -> Result<CallToolResult, McpError> {
         let mut args = self.base_args();
         args.extend(["customers".into(), "list".into()]);
-        if let Some(v) = p.limit { args.extend(["--limit".into(), v.to_string()]); }
-        if let Some(v) = p.page { args.extend(["--page".into(), v.to_string()]); }
-        if let Some(v) = p.search { args.extend(["--search".into(), v]); }
-        Ok(match self.run_cli(args).await { Ok(v) => value_to_result(v), Err(e) => flute_err_to_result(e) })
+        if let Some(v) = p.limit {
+            args.extend(["--limit".into(), v.to_string()]);
+        }
+        if let Some(v) = p.page {
+            args.extend(["--page".into(), v.to_string()]);
+        }
+        if let Some(v) = p.search {
+            args.extend(["--search".into(), v]);
+        }
+        Ok(match self.run_cli(args).await {
+            Ok(v) => value_to_result(v),
+            Err(e) => flute_err_to_result(e),
+        })
     }
 
     #[tool(description = "List a customer's stored payment methods. Safe to retry.")]
-    pub async fn customers_methods(&self, Parameters(p): Parameters<Id>) -> Result<CallToolResult, McpError> {
+    pub async fn customers_methods(
+        &self,
+        Parameters(p): Parameters<Id>,
+    ) -> Result<CallToolResult, McpError> {
         let mut args = self.base_args();
         args.extend(["customers".into(), "methods".into(), p.id]);
-        Ok(match self.run_cli(args).await { Ok(v) => value_to_result(v), Err(e) => flute_err_to_result(e) })
+        Ok(match self.run_cli(args).await {
+            Ok(v) => value_to_result(v),
+            Err(e) => flute_err_to_result(e),
+        })
     }
 
-    #[tool(description = "Create a customer. NOT idempotent — duplicates create a second record. Response is minimal; follow with customers_get.")]
-    pub async fn customers_create(&self, Parameters(p): Parameters<CustomerFields>) -> Result<CallToolResult, McpError> {
-        if let Some(blocked) = self.guard_write("customers_create") { return Ok(blocked); }
+    #[tool(
+        description = "Create a customer. NOT idempotent — duplicates create a second record. Response is minimal; follow with customers_get."
+    )]
+    pub async fn customers_create(
+        &self,
+        Parameters(p): Parameters<CustomerFields>,
+    ) -> Result<CallToolResult, McpError> {
+        if let Some(blocked) = self.guard_write("customers_create") {
+            return Ok(blocked);
+        }
         let mut args = self.base_args();
         args.extend(["customers".into(), "create".into()]);
         Self::customer_field_args(&mut args, p);
-        Ok(match self.run_cli(args).await { Ok(v) => value_to_result(v), Err(e) => flute_err_to_result(e) })
+        Ok(match self.run_cli(args).await {
+            Ok(v) => value_to_result(v),
+            Err(e) => flute_err_to_result(e),
+        })
     }
 
-    #[tool(description = "Update a customer (GET-merge-PUT — omitted fields retain existing values). Safe to retry.")]
-    pub async fn customers_update(&self, Parameters(p): Parameters<CustomerUpdate>) -> Result<CallToolResult, McpError> {
-        if let Some(blocked) = self.guard_write("customers_update") { return Ok(blocked); }
+    #[tool(
+        description = "Update a customer (GET-merge-PUT — omitted fields retain existing values). Safe to retry."
+    )]
+    pub async fn customers_update(
+        &self,
+        Parameters(p): Parameters<CustomerUpdate>,
+    ) -> Result<CallToolResult, McpError> {
+        if let Some(blocked) = self.guard_write("customers_update") {
+            return Ok(blocked);
+        }
         let mut args = self.base_args();
         args.extend(["customers".into(), "update".into(), p.id]);
         Self::customer_field_args(&mut args, p.fields);
-        Ok(match self.run_cli(args).await { Ok(v) => value_to_result(v), Err(e) => flute_err_to_result(e) })
+        Ok(match self.run_cli(args).await {
+            Ok(v) => value_to_result(v),
+            Err(e) => flute_err_to_result(e),
+        })
     }
 
     #[tool(description = "Delete a customer. 404 on repeat = idempotent.")]
-    pub async fn customers_delete(&self, Parameters(p): Parameters<Id>) -> Result<CallToolResult, McpError> {
-        if let Some(blocked) = self.guard_write("customers_delete") { return Ok(blocked); }
+    pub async fn customers_delete(
+        &self,
+        Parameters(p): Parameters<Id>,
+    ) -> Result<CallToolResult, McpError> {
+        if let Some(blocked) = self.guard_write("customers_delete") {
+            return Ok(blocked);
+        }
         let mut args = self.base_args();
         args.extend(["customers".into(), "delete".into(), p.id, "--yes".into()]);
-        Ok(match self.run_cli(args).await { Ok(v) => value_to_result(v), Err(e) => flute_err_to_result(e) })
+        Ok(match self.run_cli(args).await {
+            Ok(v) => value_to_result(v),
+            Err(e) => flute_err_to_result(e),
+        })
     }
 
-    #[tool(description = "Vault a card on a customer. NOT idempotent. Response is minimal; follow with customers_methods.")]
-    pub async fn customers_add_card(&self, Parameters(p): Parameters<AddCard>) -> Result<CallToolResult, McpError> {
-        if let Some(blocked) = self.guard_write("customers_add_card") { return Ok(blocked); }
+    #[tool(
+        description = "Vault a card on a customer. NOT idempotent. Response is minimal; follow with customers_methods."
+    )]
+    pub async fn customers_add_card(
+        &self,
+        Parameters(p): Parameters<AddCard>,
+    ) -> Result<CallToolResult, McpError> {
+        if let Some(blocked) = self.guard_write("customers_add_card") {
+            return Ok(blocked);
+        }
         let mut args = self.base_args();
-        args.extend(["customers".into(), "add-card".into(), p.id, "--card".into(), p.card, "--exp".into(), p.exp, "--cvv".into(), p.cvv]);
-        if let Some(v) = p.name { args.extend(["--name".into(), v]); }
-        Ok(match self.run_cli(args).await { Ok(v) => value_to_result(v), Err(e) => flute_err_to_result(e) })
+        args.extend([
+            "customers".into(),
+            "add-card".into(),
+            p.id,
+            "--card".into(),
+            p.card,
+            "--exp".into(),
+            p.exp,
+            "--cvv".into(),
+            p.cvv,
+        ]);
+        if let Some(v) = p.name {
+            args.extend(["--name".into(), v]);
+        }
+        Ok(match self.run_cli(args).await {
+            Ok(v) => value_to_result(v),
+            Err(e) => flute_err_to_result(e),
+        })
     }
 
     #[tool(description = "Vault a bank account (ACH) on a customer. NOT idempotent.")]
-    pub async fn customers_add_ach(&self, Parameters(p): Parameters<AddAch>) -> Result<CallToolResult, McpError> {
-        if let Some(blocked) = self.guard_write("customers_add_ach") { return Ok(blocked); }
+    pub async fn customers_add_ach(
+        &self,
+        Parameters(p): Parameters<AddAch>,
+    ) -> Result<CallToolResult, McpError> {
+        if let Some(blocked) = self.guard_write("customers_add_ach") {
+            return Ok(blocked);
+        }
         let mut args = self.base_args();
-        args.extend(["customers".into(), "add-ach".into(), p.id, "--routing".into(), p.routing, "--account".into(), p.account, "--account-type".into(), p.account_type, "--account-holder-type".into(), p.account_holder_type]);
-        if let Some(v) = p.tax_id { args.extend(["--tax-id".into(), v]); }
-        if let Some(v) = p.name { args.extend(["--name".into(), v]); }
-        Ok(match self.run_cli(args).await { Ok(v) => value_to_result(v), Err(e) => flute_err_to_result(e) })
+        args.extend([
+            "customers".into(),
+            "add-ach".into(),
+            p.id,
+            "--routing".into(),
+            p.routing,
+            "--account".into(),
+            p.account,
+            "--account-type".into(),
+            p.account_type,
+            "--account-holder-type".into(),
+            p.account_holder_type,
+        ]);
+        if let Some(v) = p.tax_id {
+            args.extend(["--tax-id".into(), v]);
+        }
+        if let Some(v) = p.name {
+            args.extend(["--name".into(), v]);
+        }
+        Ok(match self.run_cli(args).await {
+            Ok(v) => value_to_result(v),
+            Err(e) => flute_err_to_result(e),
+        })
     }
 
-    #[tool(description = "Remove a stored payment method from a customer. 404 on repeat = idempotent.")]
-    pub async fn customers_remove_method(&self, Parameters(p): Parameters<RemoveMethod>) -> Result<CallToolResult, McpError> {
-        if let Some(blocked) = self.guard_write("customers_remove_method") { return Ok(blocked); }
+    #[tool(
+        description = "Remove a stored payment method from a customer. 404 on repeat = idempotent."
+    )]
+    pub async fn customers_remove_method(
+        &self,
+        Parameters(p): Parameters<RemoveMethod>,
+    ) -> Result<CallToolResult, McpError> {
+        if let Some(blocked) = self.guard_write("customers_remove_method") {
+            return Ok(blocked);
+        }
         let mut args = self.base_args();
-        args.extend(["customers".into(), "remove-method".into(), p.id, p.method_id, "--yes".into()]);
-        Ok(match self.run_cli(args).await { Ok(v) => value_to_result(v), Err(e) => flute_err_to_result(e) })
+        args.extend([
+            "customers".into(),
+            "remove-method".into(),
+            p.id,
+            p.method_id,
+            "--yes".into(),
+        ]);
+        Ok(match self.run_cli(args).await {
+            Ok(v) => value_to_result(v),
+            Err(e) => flute_err_to_result(e),
+        })
     }
 }
