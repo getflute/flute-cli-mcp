@@ -49,3 +49,71 @@ async fn auth_status_maps_has_credentials() {
     assert_eq!(res.is_error, Some(false));
     assert_eq!(mock.calls()[0], svec(["--profile", "sandbox", "--output", "json", "auth", "status"]));
 }
+
+use flute_cli_mcp::tools::transactions::{SaleArgs, Settle, TransactionsList, TxnRef};
+
+#[tokio::test]
+async fn transactions_read_argv() {
+    let (srv, mock) = sandbox(3);
+    srv.transactions_list(Parameters(TransactionsList { limit: Some(25), unsettled: Some(true), ..Default::default() })).await.unwrap();
+    srv.transactions_get(Parameters(flute_cli_mcp::tools::Id { id: "t1".into() })).await.unwrap();
+    srv.transactions_inspect(Parameters(flute_cli_mcp::tools::Id { id: "t2".into() })).await.unwrap();
+    let c = mock.calls();
+    assert_eq!(c[0], svec(["--profile","sandbox","--output","json","transactions","list","--limit","25","--unsettled"]));
+    assert_eq!(c[1], svec(["--profile","sandbox","--output","json","transactions","get","t1"]));
+    assert_eq!(c[2], svec(["--profile","sandbox","--output","json","transactions","inspect","t2"]));
+}
+
+#[tokio::test]
+async fn transactions_sale_argv() {
+    let (srv, mock) = sandbox(1);
+    srv.transactions_sale(Parameters(SaleArgs {
+        amount: "10.00".into(), card: Some("4111111111111111".into()),
+        exp: Some("12/27".into()), cvv: Some("123".into()), ..Default::default()
+    })).await.unwrap();
+    assert_eq!(mock.calls()[0], svec([
+        "--profile","sandbox","--output","json","transactions","sale",
+        "--amount","10.00","--card","4111111111111111","--exp","12/27","--cvv","123",
+    ]));
+}
+
+#[tokio::test]
+async fn transactions_refund_argv() {
+    let (srv, mock) = sandbox(1);
+    srv.transactions_refund(Parameters(TxnRef { transaction_id: "t9".into(), amount: Some("5.00".into()) })).await.unwrap();
+    assert_eq!(mock.calls()[0], svec([
+        "--profile","sandbox","--output","json","transactions","refund","--transaction-id","t9","--amount","5.00",
+    ]));
+}
+
+#[tokio::test]
+async fn transactions_settle_argv() {
+    let (srv, mock) = sandbox(1);
+    srv.transactions_settle(Parameters(Settle { payment_processor_id: "pp1".into() })).await.unwrap();
+    assert_eq!(mock.calls()[0], svec(["--profile","sandbox","--output","json","transactions","settle","--payment-processor-id","pp1"]));
+}
+
+#[tokio::test]
+async fn prod_blocks_writes_without_override() {
+    let mock = MockRunner::new(vec![]); // must never be called
+    let srv = FluteServer::new(cfg(Profile::Production, false, None), mock.clone());
+    let res = srv.transactions_sale(Parameters(SaleArgs { amount: "10.00".into(), ..Default::default() })).await.unwrap();
+    assert_eq!(res.is_error, Some(true));
+    assert!(mock.calls().is_empty());
+}
+
+#[tokio::test]
+async fn prod_allows_writes_with_override() {
+    let mock = MockRunner::new(vec![Ok(json!({"object":"transaction"}))]);
+    let srv = FluteServer::new(cfg(Profile::Production, true, None), mock.clone());
+    srv.transactions_sale(Parameters(SaleArgs { amount: "10.00".into(), ..Default::default() })).await.unwrap();
+    assert_eq!(mock.calls()[0], svec(["--profile","production","--output","json","transactions","sale","--amount","10.00"]));
+}
+
+#[tokio::test]
+async fn prod_allows_reads() {
+    let mock = MockRunner::new(vec![Ok(json!({"object":"transaction_list"}))]);
+    let srv = FluteServer::new(cfg(Profile::Production, false, None), mock.clone());
+    srv.transactions_list(Parameters(TransactionsList::default())).await.unwrap();
+    assert_eq!(mock.calls().len(), 1);
+}

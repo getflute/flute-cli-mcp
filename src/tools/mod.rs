@@ -5,6 +5,7 @@ use serde_json::Value;
 use crate::error::FluteError;
 
 pub mod util;
+pub mod transactions;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
