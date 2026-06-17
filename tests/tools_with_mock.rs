@@ -208,3 +208,30 @@ async fn settlements_and_subscriptions_argv() {
     assert_eq!(c[0], svec(["--profile","sandbox","--output","json","settlements","list","--status","open"]));
     assert_eq!(c[1], svec(["--profile","sandbox","--output","json","subscriptions","create","--customer-id","c1","--payment-method-id","pm1","--amount","9.99","--number-of-payments","12"]));
 }
+
+use flute_cli_mcp::tools::tokens::{TokenCreate, TokenRevoke};
+
+#[tokio::test]
+async fn tokens_create_uses_per_call_merchant_id() {
+    let (srv, mock) = sandbox(1);
+    srv.tokens_create(Parameters(TokenCreate { name: "ci".into(), merchant_id: Some("m-1".into()) })).await.unwrap();
+    assert_eq!(mock.calls()[0], svec(["--profile","sandbox","--output","json","tokens","create","--merchant-id","m-1","--name","ci"]));
+}
+
+#[tokio::test]
+async fn tokens_create_falls_back_to_pinned_merchant_id() {
+    let mock = MockRunner::new(vec![Ok(json!({"object":"api_token"}))]);
+    let srv = FluteServer::new(cfg(Profile::Sandbox, false, Some("m-pinned")), mock.clone());
+    srv.tokens_create(Parameters(TokenCreate { name: "ci".into(), merchant_id: None })).await.unwrap();
+    assert_eq!(mock.calls()[0], svec(["--profile","sandbox","--output","json","tokens","create","--merchant-id","m-pinned","--name","ci"]));
+}
+
+#[tokio::test]
+async fn tokens_create_errors_without_any_merchant_id() {
+    let mock = MockRunner::new(vec![]); // CLI must never be called
+    let srv = FluteServer::new(cfg(Profile::Sandbox, false, None), mock.clone());
+    let res = srv.tokens_create(Parameters(TokenCreate { name: "ci".into(), merchant_id: None })).await.unwrap();
+    assert_eq!(res.is_error, Some(true));
+    assert!(mock.calls().is_empty());
+    let _ = TokenRevoke::default();
+}
