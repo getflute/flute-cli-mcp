@@ -15,6 +15,7 @@ pub struct PosList {
     pub terminal_id: Option<String>,
     #[serde(default)]
     pub limit: Option<u32>,
+    /// Zero-based page index: 0 (or omit) is the first page, 1 the second, etc.
     #[serde(default)]
     pub page: Option<u32>,
 }

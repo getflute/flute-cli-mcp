@@ -68,6 +68,8 @@ The `flute-prod-readonly` instance serves reads; production writes are refused u
 
 Reads are always allowed. On a guarded production instance, every write (anything that creates/moves money or mutates a resource) returns a `kind:"client"` error without spawning the CLI.
 
+**Pagination is zero-based.** On the list tools (`transactions_list`, `customers_list`, `settlements_list`, `subscriptions_list`, `pos_list`), `page: 0` — or omitting `page` — returns the first page, `page: 1` the second, and so on; `limit` maps to the API page size. The MCP forwards `page` to the CLI/API verbatim (no offset). A nonzero `total` with an empty results list usually means the requested `page` is past the last page.
+
 Excluded by design: `auth login/logout/switch` (interactive/local-state), `update` (operator-only), `completion` (shell-only), `pos create --wait` (poll `pos_get` instead).
 
 ## Errors

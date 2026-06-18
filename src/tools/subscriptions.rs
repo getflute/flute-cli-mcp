@@ -13,6 +13,7 @@ use crate::tools::{Id, flute_err_to_result, value_to_result};
 pub struct SubscriptionsList {
     #[serde(default)]
     pub limit: Option<u32>,
+    /// Zero-based page index: 0 (or omit) is the first page, 1 the second, etc.
     #[serde(default)]
     pub page: Option<u32>,
     #[serde(default)]

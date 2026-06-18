@@ -861,3 +861,50 @@ async fn production_blocks_a_write_in_every_group() {
         "no write should reach the CLI on a guarded production instance"
     );
 }
+
+/// `page` is forwarded to the CLI verbatim — the API is zero-based and the MCP applies
+/// NO offset. This locks the documented contract: page 0 (or omitted) is the first page.
+/// If anyone adds a 1-based normalization later, this test fails.
+#[tokio::test]
+async fn page_is_forwarded_verbatim_zero_based() {
+    let (srv, mock) = sandbox(2);
+    srv.customers_list(Parameters(CustomersList {
+        page: Some(2),
+        ..Default::default()
+    }))
+    .await
+    .unwrap();
+    srv.transactions_list(Parameters(TransactionsList {
+        page: Some(0),
+        ..Default::default()
+    }))
+    .await
+    .unwrap();
+    let c = mock.calls();
+    assert_eq!(
+        c[0],
+        svec([
+            "--profile",
+            "sandbox",
+            "--output",
+            "json",
+            "customers",
+            "list",
+            "--page",
+            "2"
+        ])
+    );
+    assert_eq!(
+        c[1],
+        svec([
+            "--profile",
+            "sandbox",
+            "--output",
+            "json",
+            "transactions",
+            "list",
+            "--page",
+            "0"
+        ])
+    );
+}

@@ -14,6 +14,7 @@ pub struct TransactionsList {
     /// Page size (maps to the API `pageSize`).
     #[serde(default)]
     pub limit: Option<u32>,
+    /// Zero-based page index: 0 (or omit) is the first page, 1 the second, etc.
     #[serde(default)]
     pub page: Option<u32>,
     /// Only unsettled transactions.
