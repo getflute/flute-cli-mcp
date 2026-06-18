@@ -33,6 +33,18 @@ pub(crate) fn value_to_result(value: Value) -> CallToolResult {
     ])
 }
 
+/// Build a synthetic success envelope for operations whose CLI command returns an empty
+/// body (delete / remove-method / revoke). Without this, an empty-stdout success surfaces
+/// to the client as a bare JSON `null`; this gives the same `{object, data, meta}` shape
+/// the other tools return.
+pub(crate) fn ack_envelope(object: &str, data: Value, environment: &str) -> Value {
+    serde_json::json!({
+        "object": object,
+        "data": data,
+        "meta": { "environment": environment },
+    })
+}
+
 /// Truncate raw CLI output to at most 4 KiB on a UTF-8 char boundary before embedding
 /// it in an error payload, so a non-JSON failure body can't leak large or sensitive
 /// content back to the client or balloon the response.

@@ -6,7 +6,7 @@ use rmcp::{
 use serde::Deserialize;
 
 use crate::server::FluteServer;
-use crate::tools::{Id, flute_err_to_result, value_to_result};
+use crate::tools::{Id, ack_envelope, flute_err_to_result, value_to_result};
 
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -192,9 +192,22 @@ impl FluteServer {
         if let Some(blocked) = self.guard_write("customers_delete") {
             return Ok(blocked);
         }
+        let id = p.id;
         let mut args = self.base_args();
-        args.extend(["customers".into(), "delete".into(), p.id, "--yes".into()]);
+        args.extend([
+            "customers".into(),
+            "delete".into(),
+            id.clone(),
+            "--yes".into(),
+        ]);
         Ok(match self.run_cli(args).await {
+            // The CLI returns no body on a successful delete (empty stdout -> Null).
+            // Synthesize a structured success so clients don't get a bare `null`.
+            Ok(v) if v.is_null() => value_to_result(ack_envelope(
+                "customer_delete",
+                serde_json::json!({ "id": id, "deleted": true }),
+                self.config.profile.as_cli_str(),
+            )),
             Ok(v) => value_to_result(v),
             Err(e) => flute_err_to_result(e),
         })
@@ -275,15 +288,23 @@ impl FluteServer {
         if let Some(blocked) = self.guard_write("customers_remove_method") {
             return Ok(blocked);
         }
+        let id = p.id;
+        let method_id = p.method_id;
         let mut args = self.base_args();
         args.extend([
             "customers".into(),
             "remove-method".into(),
-            p.id,
-            p.method_id,
+            id.clone(),
+            method_id.clone(),
             "--yes".into(),
         ]);
         Ok(match self.run_cli(args).await {
+            // No body on success (empty stdout -> Null); synthesize a structured result.
+            Ok(v) if v.is_null() => value_to_result(ack_envelope(
+                "payment_method_removed",
+                serde_json::json!({ "id": id, "method_id": method_id, "removed": true }),
+                self.config.profile.as_cli_str(),
+            )),
             Ok(v) => value_to_result(v),
             Err(e) => flute_err_to_result(e),
         })

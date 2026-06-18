@@ -908,3 +908,61 @@ async fn page_is_forwarded_verbatim_zero_based() {
         ])
     );
 }
+
+/// delete / remove-method / revoke return empty stdout on success, which the runner maps
+/// to `Value::Null`. The tools must synthesize a structured `{object, data, meta}` envelope
+/// instead of handing back a bare `null`.
+#[tokio::test]
+async fn empty_success_synthesizes_structured_envelope() {
+    fn body(res: &rmcp::model::CallToolResult) -> serde_json::Value {
+        let v = serde_json::to_value(res).unwrap();
+        serde_json::from_str(v["content"][0]["text"].as_str().unwrap()).unwrap()
+    }
+
+    let mock = MockRunner::new(vec![
+        Ok(serde_json::Value::Null),
+        Ok(serde_json::Value::Null),
+        Ok(serde_json::Value::Null),
+    ]);
+    let srv = FluteServer::new(cfg(Profile::Sandbox, false, None), mock.clone());
+
+    let del = srv
+        .customers_delete(Parameters(flute_cli_mcp::tools::Id { id: "c1".into() }))
+        .await
+        .unwrap();
+    let rm = srv
+        .customers_remove_method(Parameters(RemoveMethod {
+            id: "c1".into(),
+            method_id: "m9".into(),
+        }))
+        .await
+        .unwrap();
+    let rev = srv
+        .tokens_revoke(Parameters(TokenRevoke {
+            client_id: "cid1".into(),
+            merchant_id: Some("m1".into()),
+        }))
+        .await
+        .unwrap();
+
+    // customers_delete: full shape, not a bare null.
+    assert_eq!(del.is_error, Some(false));
+    let d = body(&del);
+    assert_eq!(d["object"], "customer_delete");
+    assert_eq!(d["data"]["id"], "c1");
+    assert_eq!(d["data"]["deleted"], true);
+    assert_eq!(d["meta"]["environment"], "sandbox");
+
+    // remove-method and revoke: structured success with their own object + data.
+    assert_eq!(rm.is_error, Some(false));
+    let r = body(&rm);
+    assert_eq!(r["object"], "payment_method_removed");
+    assert_eq!(r["data"]["method_id"], "m9");
+    assert_eq!(r["data"]["removed"], true);
+
+    assert_eq!(rev.is_error, Some(false));
+    let v = body(&rev);
+    assert_eq!(v["object"], "api_token_revoked");
+    assert_eq!(v["data"]["client_id"], "cid1");
+    assert_eq!(v["data"]["revoked"], true);
+}

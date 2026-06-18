@@ -6,7 +6,7 @@ use rmcp::{
 use serde::Deserialize;
 
 use crate::server::FluteServer;
-use crate::tools::{flute_err_to_result, value_to_result};
+use crate::tools::{ack_envelope, flute_err_to_result, value_to_result};
 
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -100,17 +100,24 @@ impl FluteServer {
             Ok(m) => m,
             Err(e) => return Ok(flute_err_to_result(e)),
         };
+        let client_id = p.client_id;
         let mut args = self.base_args();
         args.extend([
             "tokens".into(),
             "revoke".into(),
             "--client-id".into(),
-            p.client_id,
+            client_id.clone(),
             "--merchant-id".into(),
             merchant_id,
             "--yes".into(),
         ]);
         Ok(match self.run_cli(args).await {
+            // No body on success (empty stdout -> Null); synthesize a structured result.
+            Ok(v) if v.is_null() => value_to_result(ack_envelope(
+                "api_token_revoked",
+                serde_json::json!({ "client_id": client_id, "revoked": true }),
+                self.config.profile.as_cli_str(),
+            )),
             Ok(v) => value_to_result(v),
             Err(e) => flute_err_to_result(e),
         })
