@@ -170,7 +170,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Rich client-composed view of a transaction, including available operations. Safe to retry."
+        description = "Rich client-composed view of a transaction: its current `status` (e.g. \"Voided\") plus `availableOperations`. Note `transactionType` reflects the ORIGINAL type (e.g. \"Sale\") even after a void/refund — determine current state from `status`/`availableOperations`, not `transactionType`. Safe to retry."
     )]
     pub async fn transactions_inspect(
         &self,
@@ -242,7 +242,9 @@ impl FluteServer {
         })
     }
 
-    #[tool(description = "Void a transaction. 404 on repeat = already voided (idempotent).")]
+    #[tool(
+        description = "Void a transaction. The void is recorded as a separate operation (response `type: \"Void\"`); the original transaction keeps its `transactionType` (e.g. \"Sale\") and its `status` becomes \"Voided\" — so a later inspect showing transactionType \"Sale\" with status \"Voided\" is correct, not a lost void. 404 on repeat = already voided (idempotent)."
+    )]
     pub async fn transactions_void(
         &self,
         Parameters(p): Parameters<TxnRef>,

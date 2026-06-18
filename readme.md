@@ -74,7 +74,12 @@ Excluded by design: `auth login/logout/switch` (interactive/local-state), `updat
 
 ## Errors
 
-Every tool returns either a success result or `isError: true` with a structured JSON content item whose `kind` is one of `api`, `transport`, `auth`, `decode`, `client`, `spawn`, `timeout`, `bad_output`. Branch on `kind` first; `transport` and `api` with status ∈ {500,502,503,504} are safe to retry with backoff; `auth` means configure credentials on the operator's machine.
+**Success and error payloads have different shapes by design — discriminate on the MCP `isError` flag, not on the body.**
+
+- **Success** (`isError: false`): the CLI's envelope, `{ "object": …, "data": …, "meta": { "environment": … } }`.
+- **Error** (`isError: true`): a flat `{ "kind": …, "message": …, "status"?: …, "correlation_id"?: … }`. This intentionally matches the CLI's documented error contract so you can branch on `kind`/`status` — it is **not** wrapped in `object`/`data`/`meta`.
+
+So a deleted-then-fetched customer returns `isError: true` with `{kind:"api", status:404, …}` — that is the expected 404 shape, not a missing envelope. `kind` is one of `api`, `transport`, `auth`, `decode`, `client`, `spawn`, `timeout`, `bad_output`. Branch on `kind` first; `transport` and `api` with status ∈ {500,502,503,504} are safe to retry with backoff; `auth` means configure credentials on the operator's machine.
 
 ## Security
 
