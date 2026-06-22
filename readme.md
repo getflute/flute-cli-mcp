@@ -62,6 +62,22 @@ flute-cli-mcp        # talks JSON-RPC over stdio
 
 The `flute-prod-readonly` instance serves reads; production writes are refused unless you add `"FLUTE_MCP_ALLOW_PROD_WRITES": "1"`.
 
+## Codex app config
+
+Codex stores MCP servers in `~/.codex/config.toml`. The Codex app, CLI, and IDE extension share this configuration.
+
+```toml
+[mcp_servers.flute-sandbox]
+command = "flute-cli-mcp"
+env = { FLUTE_PROFILE = "sandbox" }
+
+[mcp_servers.flute-prod-readonly]
+command = "flute-cli-mcp"
+env = { FLUTE_PROFILE = "production" }
+```
+
+The `flute-prod-readonly` instance serves reads; production writes are refused unless you add `FLUTE_MCP_ALLOW_PROD_WRITES = "1"` to its `env` table.
+
 ## Tools
 
 47 tools across: `transactions` (get/list/inspect/sale/auth/capture/void/refund/settle/tip_adjust), `ach` (debit/credit/void/refund), `customers` (get/list/methods/create/update/delete/add_card/add_ach/remove_method), `terminals` (list/status), `devices` (list/get/ttp_jwt/register/ttp_activate), `pos` (get/list/create/cancel), `settlements` (list/get), `subscriptions` (get/list/payments/create/terminate), `tokens` (list/create/revoke), plus `ping`, `version`, `auth_status`.
