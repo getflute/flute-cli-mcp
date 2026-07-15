@@ -7,6 +7,15 @@ license = "MIT"
 repository = "https://github.com/getflute/flute-cli-mcp"
 homepage = "https://github.com/getflute/flute-cli-mcp"
 
+# This crate handles payment operations and shells out to an external CLI, so we
+# forbid unsafe entirely and treat the default clippy lint set as warnings. CI
+# promotes these to hard errors (`clippy -- -D warnings`).
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
 [[bin]]
 name = "flute-cli-mcp"
 path = "src/main.rs"
