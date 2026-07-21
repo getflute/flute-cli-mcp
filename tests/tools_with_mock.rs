@@ -563,6 +563,40 @@ async fn ach_debit_argv() {
     );
 }
 
+// ARISE-4505 BUG-06: business ACH needs a company name. The CLI supports
+// `--contact-company`; the tool must expose `contact_company` and forward it.
+#[tokio::test]
+async fn ach_debit_argv_forwards_contact_company() {
+    let (srv, mock) = sandbox(1);
+    srv.ach_debit(Parameters(AchMove {
+        amount: "25.00".into(),
+        payment_processor_id: "pp1".into(),
+        routing: "021000021".into(),
+        account: "123456789".into(),
+        account_type: "checking".into(),
+        account_holder_type: "business".into(),
+        billing_line1: "1 Main St".into(),
+        billing_city: "Austin".into(),
+        billing_state: "TX".into(),
+        billing_state_id: 44,
+        billing_postal_code: "78701".into(),
+        contact_first_name: "A".into(),
+        contact_last_name: "B".into(),
+        contact_email: "a@b.com".into(),
+        contact_phone: "5125551234".into(),
+        contact_company: Some("Acme Corp".into()),
+        ..Default::default()
+    }))
+    .await
+    .unwrap();
+    let argv = &mock.calls()[0];
+    let pos = argv
+        .iter()
+        .position(|a| a == "--contact-company")
+        .expect("argv must include --contact-company");
+    assert_eq!(argv[pos + 1], "Acme Corp");
+}
+
 use flute_cli_mcp::tools::pos::{PosCreate, PosList};
 
 #[tokio::test]
@@ -639,6 +673,7 @@ async fn settlements_and_subscriptions_argv() {
         payment_method_id: "pm1".into(),
         amount: "9.99".into(),
         number_of_payments: 12,
+        payment_processor_id: "pp1".into(),
         ..Default::default()
     }))
     .await
@@ -680,7 +715,9 @@ async fn settlements_and_subscriptions_argv() {
             "--amount",
             "9.99",
             "--number-of-payments",
-            "12"
+            "12",
+            "--payment-processor-id",
+            "pp1"
         ])
     );
     assert_eq!(

@@ -12,10 +12,10 @@ use crate::tools::{Id, flute_err_to_result, value_to_result};
 #[serde(deny_unknown_fields)]
 pub struct TransactionsList {
     /// Page size (maps to the API `pageSize`).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub limit: Option<u32>,
     /// Zero-based page index: 0 (or omit) is the first page, 1 the second, etc.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub page: Option<u32>,
     /// Only unsettled transactions.
     #[serde(default)]
@@ -49,10 +49,10 @@ pub struct SaleArgs {
     #[serde(default)]
     pub payment_method_id: Option<String>,
     /// Currency id; API default 1 = USD.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub currency_id: Option<u32>,
     /// Card data source; CLI default 1 = Internet/ISV.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub card_data_source: Option<u32>,
     #[serde(default)]
     pub reference_id: Option<String>,
