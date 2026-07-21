@@ -11,10 +11,10 @@ use crate::tools::{Id, ack_envelope, flute_err_to_result, value_to_result};
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CustomersList {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub limit: Option<u32>,
     /// Zero-based page index: 0 (or omit) is the first page, 1 the second, etc.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub page: Option<u32>,
     #[serde(default)]
     pub search: Option<String>,

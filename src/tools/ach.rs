@@ -26,17 +26,22 @@ pub struct AchMove {
     pub billing_city: String,
     pub billing_state: String,
     /// Numeric state id (free-text state alone is rejected).
+    #[serde(deserialize_with = "crate::tools::de_flexible_u32_req")]
     pub billing_state_id: u32,
     pub billing_postal_code: String,
     /// Numeric country id; 1 = US.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub billing_country_id: Option<u32>,
     pub contact_first_name: String,
     pub contact_last_name: String,
     pub contact_email: String,
     pub contact_phone: String,
-    /// SEC code; CLI default 1 = Web.
+    /// Contact company name. Maps to `contactInfo.companyName`; **required by
+    /// the API when `account_holder_type` is "business".**
     #[serde(default)]
+    pub contact_company: Option<String>,
+    /// SEC code; CLI default 1 = Web.
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub sec_code: Option<u32>,
     /// Requester IP; CLI default 127.0.0.1.
     #[serde(default)]
@@ -64,6 +69,9 @@ impl FluteServer {
         a.extend(["--contact-last-name".into(), p.contact_last_name]);
         a.extend(["--contact-email".into(), p.contact_email]);
         a.extend(["--contact-phone".into(), p.contact_phone]);
+        if let Some(v) = p.contact_company {
+            a.extend(["--contact-company".into(), v]);
+        }
         a.extend(["--sec-code".into(), p.sec_code.unwrap_or(1).to_string()]);
         a.extend([
             "--requester-ip".into(),

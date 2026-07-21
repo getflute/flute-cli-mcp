@@ -13,10 +13,10 @@ use crate::tools::{Id, flute_err_to_result, value_to_result};
 pub struct PosList {
     #[serde(default)]
     pub terminal_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub limit: Option<u32>,
     /// Zero-based page index: 0 (or omit) is the first page, 1 the second, etc.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub page: Option<u32>,
 }
 
@@ -29,10 +29,10 @@ pub struct PosCreate {
     pub pos_device_id: String,
     pub reference_id: String,
     /// Currency id; default 1.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub currency_id: Option<u32>,
     /// Transaction type; default 2 = Sale (1=Auth,3=Capture,4=Void,5=Refund).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub transaction_type: Option<u32>,
     #[serde(default)]
     pub tip_amount: Option<String>,

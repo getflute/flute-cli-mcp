@@ -11,10 +11,10 @@ use crate::tools::{Id, flute_err_to_result, value_to_result};
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SubscriptionsList {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub limit: Option<u32>,
     /// Zero-based page index: 0 (or omit) is the first page, 1 the second, etc.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub page: Option<u32>,
     #[serde(default)]
     pub search: Option<String>,
@@ -33,24 +33,25 @@ pub struct SubscriptionCreate {
     pub payment_method_id: String,
     /// Amount as a decimal string, e.g. "10.00".
     pub amount: String,
+    #[serde(deserialize_with = "crate::tools::de_flexible_u32_req")]
     pub number_of_payments: u32,
     /// "day" | "week" | "month" (default month).
     #[serde(default)]
     pub interval: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub payment_frequency: Option<u32>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub currency_id: Option<u32>,
     /// Default 2 = Sale; 11 = AchDebit.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub transaction_type: Option<u32>,
     #[serde(default)]
     pub requester_ip: Option<String>,
-    #[serde(default)]
-    pub payment_processor_id: Option<String>,
+    /// Required by the API. Maps to `paymentProcessorId`.
+    pub payment_processor_id: String,
     #[serde(default)]
     pub start_date: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub sec_code: Option<u32>,
     #[serde(default)]
     pub faster: Option<bool>,
@@ -134,6 +135,8 @@ impl FluteServer {
             p.amount,
             "--number-of-payments".into(),
             p.number_of_payments.to_string(),
+            "--payment-processor-id".into(),
+            p.payment_processor_id,
         ]);
         if let Some(v) = p.interval {
             args.extend(["--interval".into(), v]);
@@ -149,9 +152,6 @@ impl FluteServer {
         }
         if let Some(v) = p.requester_ip {
             args.extend(["--requester-ip".into(), v]);
-        }
-        if let Some(v) = p.payment_processor_id {
-            args.extend(["--payment-processor-id".into(), v]);
         }
         if let Some(v) = p.start_date {
             args.extend(["--start-date".into(), v]);

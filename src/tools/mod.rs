@@ -1,8 +1,48 @@
 use rmcp::model::{CallToolResult, Content};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
 use crate::error::FluteError;
+
+/// Deserialize an optional `u32` that may arrive as a JSON number **or** a
+/// numeric string. MCP clients (LLMs) frequently send integers as quoted
+/// strings; without this, serde rejects them with
+/// `invalid type: string "..", expected u32` (surfaced to the client as
+/// JSON-RPC `-32602`). A non-numeric string is still an error, and native
+/// numbers keep working. (ARISE-4505 BUG-03.)
+pub(crate) fn de_flexible_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum NumOrStr {
+        Num(u32),
+        Str(String),
+    }
+    match Option::<NumOrStr>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(NumOrStr::Num(n)) => Ok(Some(n)),
+        Some(NumOrStr::Str(s)) => {
+            let trimmed = s.trim();
+            trimmed.parse::<u32>().map(Some).map_err(|_| {
+                serde::de::Error::custom(format!("expected an integer, got string {trimmed:?}"))
+            })
+        }
+    }
+}
+
+/// Required-field counterpart of [`de_flexible_u32`]: accepts a JSON number or a
+/// numeric string but rejects `null`. Absent fields are still reported as
+/// missing by the derived `Deserialize` (this runs only when the field is
+/// present). (ARISE-4505 BUG-03.)
+pub(crate) fn de_flexible_u32_req<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    de_flexible_u32(deserializer)?
+        .ok_or_else(|| serde::de::Error::custom("expected an integer, got null"))
+}
 
 pub mod ach;
 pub mod customers;
