@@ -23,7 +23,7 @@ irm https://github.com/getflute/flute-cli-mcp/releases/latest/download/flute-cli
 
 Or build from source: `cargo install --path .`
 
-Prereq: install `flute` first (see [getflute/flute-cli](https://github.com/getflute/flute-cli)) and configure credentials (`flute auth login`, or env vars).
+Prereq: install `flute` **v1.1.0 or newer** (see [getflute/flute-cli](https://github.com/getflute/flute-cli)) and configure credentials (`flute auth login`, or env vars). The `keys_*` tools invoke `flute keys …`, which does not exist before v1.1.0.
 
 ## Run
 
@@ -37,7 +37,7 @@ flute-cli-mcp        # talks JSON-RPC over stdio
 |---|---|---|
 | `FLUTE_PROFILE` | `sandbox` | `sandbox` or `production` (alias `prod`). Pinned at startup. |
 | `FLUTE_BIN` | resolved on `PATH` | Override the `flute` binary location. |
-| `FLUTE_MERCHANT_ID` | unset | Pinned ISV merchant id (token tools; per-call `merchant_id` overrides). |
+| `FLUTE_MERCHANT_ID` | unset | Pinned ISV merchant id (`keys_*` tools; per-call `merchant_id` overrides). |
 | `FLUTE_MCP_TIMEOUT_SECS` | `30` | Per-call timeout for the child process. |
 | `FLUTE_MCP_DEBUG` | off | Set to `1`/`true`/`yes`/`on` to route `flute` stderr into this server's tracing. |
 | `FLUTE_MCP_ALLOW_PROD_WRITES` | off | Set to `1`/`true`/`yes`/`on` to lift the production write guard. Any other value (including `false`/`0`/empty) keeps it on. |
@@ -80,9 +80,11 @@ The `flute-prod-readonly` instance serves reads; production writes are refused u
 
 ## Tools
 
-47 tools across: `transactions` (get/list/inspect/sale/auth/capture/void/refund/settle/tip_adjust), `ach` (debit/credit/void/refund), `customers` (get/list/methods/create/update/delete/add_card/add_ach/remove_method), `terminals` (list/status), `devices` (list/get/ttp_jwt/register/ttp_activate), `pos` (get/list/create/cancel), `settlements` (list/get), `subscriptions` (get/list/payments/create/terminate), `tokens` (list/create/revoke), plus `ping`, `version`, `auth_status`.
+47 tools across: `transactions` (get/list/inspect/sale/auth/capture/void/refund/settle/tip_adjust), `ach` (debit/credit/void/refund), `customers` (get/list/methods/create/update/delete/add_card/add_ach/remove_method), `terminals` (list/status), `devices` (list/get/ttp_jwt/register/ttp_activate), `pos` (get/list/create/cancel), `settlements` (list/get), `subscriptions` (get/list/payments/create/terminate), `keys` (list/create/revoke), plus `ping`, `version`, `auth_status`.
 
 Reads are always allowed. On a guarded production instance, every write (anything that creates/moves money or mutates a resource) returns a `kind:"client"` error without spawning the CLI.
+
+**Card charges need an AVS billing address.** `transactions_sale`, `transactions_auth`, `customers_create` and `customers_update` accept `billing_line1`, `billing_line2`, `billing_city`, `billing_state`, `billing_state_id`, `billing_postal_code` and `billing_country_id`. They are optional, but AVS-sensitive processors **decline** a card transaction sent without one — supply at least `billing_city` + `billing_country_id`. The address is sent only when at least one field is set. On `customers_update`, supplying any one of them replaces the stored address wholesale, so send the whole address rather than the single field you mean to change.
 
 **Pagination is zero-based.** On the list tools (`transactions_list`, `customers_list`, `settlements_list`, `subscriptions_list`, `pos_list`), `page: 0` — or omitting `page` — returns the first page, `page: 1` the second, and so on; `limit` maps to the API page size. The MCP forwards `page` to the CLI/API verbatim (no offset). A nonzero `total` with an empty results list usually means the requested `page` is past the last page.
 
@@ -104,8 +106,8 @@ This server is a thin wrapper around the `flute` CLI, which accepts sensitive va
 Other handling:
 
 - Credentials (`FLUTE_CLIENT_ID`/`FLUTE_CLIENT_SECRET`) are never read or logged by this server — they are simply inherited by the spawned `flute` process.
-- `auth_status` returns only `{authenticated, profile}`, never the token.
-- `tokens_create` surfaces a one-shot `clientSecret` from the API response; capture and store it securely (the API never returns it again).
+- `auth_status` returns only `{authenticated, profile}` plus `api_base_url`/`client_id`/`merchant_id` when the CLI reports them, never the secret. It is a **live** check — the CLI pings the API, so `authenticated` is true only when the stored credentials actually round-trip, and the call costs a network round-trip.
+- `keys_create` surfaces a one-shot `clientSecret` from the API response; capture and store it securely (the API never returns it again).
 - On a non-JSON CLI failure, the raw output embedded in a `bad_output` error is truncated to 4 KiB so a large or sensitive body can't be echoed back wholesale.
 
 ## License

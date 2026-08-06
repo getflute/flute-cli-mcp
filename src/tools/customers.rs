@@ -6,7 +6,7 @@ use rmcp::{
 use serde::Deserialize;
 
 use crate::server::FluteServer;
-use crate::tools::{Id, ack_envelope, flute_err_to_result, value_to_result};
+use crate::tools::{Id, ack_envelope, address::BillingArgs, flute_err_to_result, value_to_result};
 
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -34,6 +34,31 @@ pub struct CustomerFields {
     pub company: Option<String>,
     #[serde(default)]
     pub mobile: Option<String>,
+
+    // AVS billing address (ARISE-4706) → customer `billingAddress`. On update,
+    // supplying any billing_* field replaces the stored address wholesale;
+    // omitting them all preserves the customer's current one.
+    /// AVS billing street line 1.
+    #[serde(default)]
+    pub billing_line1: Option<String>,
+    /// AVS billing street line 2.
+    #[serde(default)]
+    pub billing_line2: Option<String>,
+    /// AVS billing city.
+    #[serde(default)]
+    pub billing_city: Option<String>,
+    /// AVS billing state name, e.g. "CO".
+    #[serde(default)]
+    pub billing_state: Option<String>,
+    /// AVS billing numeric state id.
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
+    pub billing_state_id: Option<u32>,
+    /// AVS billing postal / ZIP code.
+    #[serde(default)]
+    pub billing_postal_code: Option<String>,
+    /// AVS billing numeric country id; 1 = US.
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
+    pub billing_country_id: Option<u32>,
 }
 
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
@@ -93,6 +118,16 @@ impl FluteServer {
         if let Some(v) = f.mobile {
             args.extend(["--mobile".into(), v]);
         }
+        BillingArgs {
+            line1: f.billing_line1,
+            line2: f.billing_line2,
+            city: f.billing_city,
+            state: f.billing_state,
+            state_id: f.billing_state_id,
+            postal_code: f.billing_postal_code,
+            country_id: f.billing_country_id,
+        }
+        .push(args);
     }
 }
 
@@ -166,7 +201,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Update a customer (GET-merge-PUT — omitted fields retain existing values). Safe to retry."
+        description = "Update a customer (GET-merge-PUT — omitted fields retain existing values). Note the billing address is replaced wholesale: supplying ANY billing_* field overwrites the stored address, so send the complete address, not just the part you are changing. Omitting them all preserves it. Safe to retry."
     )]
     pub async fn customers_update(
         &self,

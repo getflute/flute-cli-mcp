@@ -38,6 +38,8 @@ pub struct SubscriptionCreate {
     /// "day" | "week" | "month" (default month).
     #[serde(default)]
     pub interval: Option<String>,
+    /// Interval units between payments; default 1. For `interval` "day" the API
+    /// accepts only 7, 15 or 30 — a plain 1 is rejected.
     #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub payment_frequency: Option<u32>,
     #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
@@ -114,7 +116,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Create a recurring subscription. NOT idempotent. payment_method_id must be vaulted + active."
+        description = "Create a recurring subscription. NOT idempotent. payment_method_id must be vaulted + active, and payment_processor_id is required — the API rejects a create without it. payment_frequency is the number of interval units between payments (default 1), EXCEPT for interval \"day\", where the API accepts only 7, 15 or 30 and rejects a plain 1."
     )]
     pub async fn subscriptions_create(
         &self,

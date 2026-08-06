@@ -45,13 +45,14 @@ where
 }
 
 pub mod ach;
+pub mod address;
 pub mod customers;
 pub mod devices;
+pub mod keys;
 pub mod pos;
 pub mod settlements;
 pub mod subscriptions;
 pub mod terminals;
-pub mod tokens;
 pub mod transactions;
 pub mod util;
 
