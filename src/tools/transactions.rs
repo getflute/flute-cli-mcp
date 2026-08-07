@@ -191,7 +191,9 @@ impl FluteServer {
         })
     }
 
-    #[tool(description = "Get one transaction by id. Safe to retry.")]
+    #[tool(
+        description = "Get one transaction by id. Safe to retry. The AVS result lives in the TOP-LEVEL `avsResponse` object (null when AVS is off) — `transactionReceipt.avsResponse` may be null even when the top-level one is populated, so read the top-level field. It is advisory: `result: \"Failed\"` does not mean the transaction failed."
+    )]
     pub async fn transactions_get(
         &self,
         Parameters(p): Parameters<Id>,
@@ -205,7 +207,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Rich client-composed view of a transaction: its current `status` (e.g. \"Voided\") plus `availableOperations`. Note `transactionType` reflects the ORIGINAL type (e.g. \"Sale\") even after a void/refund — determine current state from `status`/`availableOperations`, not `transactionType`. Safe to retry."
+        description = "Rich client-composed view of a transaction: its current `status` (e.g. \"Voided\") plus `availableOperations`. Note `transactionType` reflects the ORIGINAL type (e.g. \"Sale\") even after a void/refund — determine current state from `status`/`availableOperations`, not `transactionType`. The AVS result is the TOP-LEVEL `avsResponse` object — `{responseCode, action, group, result, codeDescription, …}`, or null when AVS is off; `transactionReceipt.avsResponse` may be null even when it is populated. It is advisory and independent of the outcome: an Approved transaction can carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Safe to retry."
     )]
     pub async fn transactions_inspect(
         &self,
@@ -220,7 +222,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Charge a card. NOT idempotent — each call moves money. Use a unique reference_id for server-side duplicate control; reconcile with transactions_list before retrying. Supply the billing_* AVS fields (at least billing_city + billing_country_id) — AVS-sensitive processors decline charges sent without a billing address."
+        description = "Charge a card. NOT idempotent — each call moves money. Use a unique reference_id for server-side duplicate control; reconcile with transactions_list before retrying. Supply the billing_* AVS fields (at least billing_city + billing_country_id) — AVS-sensitive processors decline charges sent without a billing address. The response's top-level `avsResponse` reports the address check as an object (null when AVS is off for the merchant/processor): `{responseCode, action, group, result, codeDescription, …}`. It is ADVISORY — an Approved charge can still carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Never treat a failed AVS result as a failed charge and never retry on it; read `status`/`responseDescription` for whether money moved."
     )]
     pub async fn transactions_sale(
         &self,
@@ -237,7 +239,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Authorize (hold) a card without capturing. NOT idempotent. Capture later with transactions_capture. Supply the billing_* AVS fields (at least billing_city + billing_country_id) — AVS-sensitive processors decline authorizations sent without a billing address."
+        description = "Authorize (hold) a card without capturing. NOT idempotent. Capture later with transactions_capture. Supply the billing_* AVS fields (at least billing_city + billing_country_id) — AVS-sensitive processors decline authorizations sent without a billing address. The response's top-level `avsResponse` reports the address check as an object (null when AVS is off for the merchant/processor). It is ADVISORY — an Approved authorization can still carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Never treat a failed AVS result as a failed authorization and never retry on it; read `status`/`responseDescription` instead."
     )]
     pub async fn transactions_auth(
         &self,

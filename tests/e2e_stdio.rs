@@ -84,6 +84,22 @@ fn lists_all_tools_and_calls_a_read() {
     let tools = listed["result"]["tools"].as_array().expect("tools array");
     assert_eq!(tools.len(), 47, "expected 47 tools, got {}", tools.len());
 
+    // The money-moving tools must keep warning that `avsResponse` is advisory:
+    // an Approved charge can carry `result:"Failed"`, and an agent that reads
+    // that as a decline and retries will double-charge. Guard the warning so it
+    // can't be dropped in a future description edit.
+    for name in ["transactions_sale", "transactions_auth"] {
+        let desc = tools
+            .iter()
+            .find(|t| t["name"] == name)
+            .and_then(|t| t["description"].as_str())
+            .unwrap_or_else(|| panic!("{name} missing from tools/list"));
+        assert!(
+            desc.contains("avsResponse") && desc.contains("never retry"),
+            "{name} description must warn that avsResponse is advisory and must not be retried on"
+        );
+    }
+
     // tools/call ping — fake returns success JSON.
     stdin
         .write_all(jsonrpc(3, "tools/call", json!({"name":"ping","arguments":{}})).as_bytes())
