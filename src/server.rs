@@ -30,7 +30,7 @@ impl FluteServer {
             + Self::pos_router()
             + Self::settlements_router()
             + Self::subscriptions_router()
-            + Self::tokens_router();
+            + Self::keys_router();
         Self {
             config,
             runner,
@@ -65,8 +65,8 @@ impl FluteServer {
         }
     }
 
-    /// Resolve the merchant id for token tools: per-call override, else the
-    /// pinned `FLUTE_MERCHANT_ID`, else a `client` error.
+    /// Resolve the merchant id for the API-key tools: per-call override, else
+    /// the pinned `FLUTE_MERCHANT_ID`, else a `client` error.
     pub(crate) fn merchant_id_for(
         &self,
         override_id: Option<String>,

@@ -6,7 +6,7 @@ use rmcp::{
 use serde::Deserialize;
 
 use crate::server::FluteServer;
-use crate::tools::{Id, flute_err_to_result, value_to_result};
+use crate::tools::{Id, address::BillingArgs, flute_err_to_result, value_to_result};
 
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -56,6 +56,31 @@ pub struct SaleArgs {
     pub card_data_source: Option<u32>,
     #[serde(default)]
     pub reference_id: Option<String>,
+
+    // AVS billing address (ARISE-4706). Sent as `billingAddress` only when at
+    // least one field is set. Omitting it can cause AVS-sensitive processors to
+    // decline the card, so supply at least city + country id for a live charge.
+    /// AVS billing street line 1.
+    #[serde(default)]
+    pub billing_line1: Option<String>,
+    /// AVS billing street line 2.
+    #[serde(default)]
+    pub billing_line2: Option<String>,
+    /// AVS billing city. The API requires city + country id once any billing field is set.
+    #[serde(default)]
+    pub billing_city: Option<String>,
+    /// AVS billing state name, e.g. "CO".
+    #[serde(default)]
+    pub billing_state: Option<String>,
+    /// AVS billing numeric state id.
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
+    pub billing_state_id: Option<u32>,
+    /// AVS billing postal / ZIP code.
+    #[serde(default)]
+    pub billing_postal_code: Option<String>,
+    /// AVS billing numeric country id; 1 = US.
+    #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
+    pub billing_country_id: Option<u32>,
 }
 
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
@@ -117,6 +142,16 @@ impl FluteServer {
         if let Some(v) = p.reference_id {
             args.extend(["--reference-id".into(), v]);
         }
+        BillingArgs {
+            line1: p.billing_line1,
+            line2: p.billing_line2,
+            city: p.billing_city,
+            state: p.billing_state,
+            state_id: p.billing_state_id,
+            postal_code: p.billing_postal_code,
+            country_id: p.billing_country_id,
+        }
+        .push(&mut args);
         args
     }
 }
@@ -185,7 +220,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Charge a card. NOT idempotent — each call moves money. Use a unique reference_id for server-side duplicate control; reconcile with transactions_list before retrying."
+        description = "Charge a card. NOT idempotent — each call moves money. Use a unique reference_id for server-side duplicate control; reconcile with transactions_list before retrying. Supply the billing_* AVS fields (at least billing_city + billing_country_id) — AVS-sensitive processors decline charges sent without a billing address."
     )]
     pub async fn transactions_sale(
         &self,
@@ -202,7 +237,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Authorize (hold) a card without capturing. NOT idempotent. Capture later with transactions_capture."
+        description = "Authorize (hold) a card without capturing. NOT idempotent. Capture later with transactions_capture. Supply the billing_* AVS fields (at least billing_city + billing_country_id) — AVS-sensitive processors decline authorizations sent without a billing address."
     )]
     pub async fn transactions_auth(
         &self,

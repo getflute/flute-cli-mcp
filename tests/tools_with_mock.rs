@@ -25,6 +25,12 @@ pub fn svec<const N: usize>(a: [&str; N]) -> Vec<String> {
     a.iter().map(|s| s.to_string()).collect()
 }
 
+/// The tool's JSON payload, decoded out of the MCP content envelope.
+pub fn body(res: &rmcp::model::CallToolResult) -> serde_json::Value {
+    let v = serde_json::to_value(res).unwrap();
+    serde_json::from_str(v["content"][0]["text"].as_str().unwrap()).unwrap()
+}
+
 /// A sandbox server wired to a MockRunner seeded with `n` empty-object OK responses.
 pub fn sandbox(n: usize) -> (FluteServer, Arc<MockRunner>) {
     let mock = MockRunner::new((0..n).map(|_| Ok(json!({"object": "x"}))).collect());
@@ -50,18 +56,65 @@ async fn util_tools_build_expected_argv() {
     );
 }
 
+/// ARISE-4706 replaced the offline `has_credentials` flag with a live
+/// `authenticated` check plus `client_id`/`merchant_id`.
 #[tokio::test]
-async fn auth_status_maps_has_credentials() {
-    let mock = MockRunner::new(vec![Ok(
-        json!({"object":"auth_status","data":{"has_credentials":true}}),
-    )]);
+async fn auth_status_maps_live_authenticated_shape() {
+    let mock = MockRunner::new(vec![Ok(json!({
+        "object": "auth_status",
+        "data": {
+            "profile": "sandbox",
+            "api_base_url": "https://sandbox.api.flute.com",
+            "authenticated": true,
+            "client_id": "cid-server",
+            "merchant_id": "m-42",
+        }
+    }))]);
     let srv = FluteServer::new(cfg(Profile::Sandbox, false, None), mock.clone());
     let res = srv.auth_status(Parameters(Empty {})).await.unwrap();
     assert_eq!(res.is_error, Some(false));
+    let v = body(&res);
+    assert_eq!(v["authenticated"], true);
+    assert_eq!(v["profile"], "sandbox");
+    assert_eq!(v["api_base_url"], "https://sandbox.api.flute.com");
+    assert_eq!(v["client_id"], "cid-server");
+    assert_eq!(v["merchant_id"], "m-42");
     assert_eq!(
         mock.calls()[0],
         svec(["--profile", "sandbox", "--output", "json", "auth", "status"])
     );
+}
+
+/// A failed live check still reports the client id, with `authenticated:false`.
+/// `merchant_id` is null when the principal isn't merchant-bound and must be
+/// omitted rather than forwarded as a JSON null.
+#[tokio::test]
+async fn auth_status_reports_failed_live_check_without_null_merchant() {
+    let mock = MockRunner::new(vec![Ok(json!({
+        "object": "auth_status",
+        "data": { "authenticated": false, "client_id": "cid-stored", "merchant_id": null }
+    }))]);
+    let srv = FluteServer::new(cfg(Profile::Sandbox, false, None), mock.clone());
+    let v = body(&srv.auth_status(Parameters(Empty {})).await.unwrap());
+    assert_eq!(v["authenticated"], false);
+    assert_eq!(v["client_id"], "cid-stored");
+    assert!(
+        v.get("merchant_id").is_none(),
+        "a null merchant_id must be omitted, got {v}"
+    );
+}
+
+/// Backward compatibility: against a pre-v1.1.0 CLI the payload still carries
+/// `has_credentials`, and reporting `authenticated:false` there would be wrong.
+#[tokio::test]
+async fn auth_status_falls_back_to_legacy_has_credentials() {
+    let mock = MockRunner::new(vec![Ok(
+        json!({"object":"auth_status","data":{"has_credentials":true}}),
+    )]);
+    let srv = FluteServer::new(cfg(Profile::Sandbox, false, None), mock.clone());
+    let v = body(&srv.auth_status(Parameters(Empty {})).await.unwrap());
+    assert_eq!(v["authenticated"], true);
+    assert!(v.get("client_id").is_none());
 }
 
 use flute_cli_mcp::tools::transactions::{SaleArgs, Settle, TransactionsList, TxnRef};
@@ -152,6 +205,82 @@ async fn transactions_sale_argv() {
             "12/27",
             "--cvv",
             "123",
+        ])
+    );
+}
+
+/// ARISE-4706: card sale/auth must forward the AVS billing address, otherwise
+/// AVS-sensitive processors decline the charge.
+#[tokio::test]
+async fn transactions_sale_forwards_avs_billing_address() {
+    let (srv, mock) = sandbox(1);
+    srv.transactions_sale(Parameters(SaleArgs {
+        amount: "10.00".into(),
+        card: Some("4111111111111111".into()),
+        billing_line1: Some("123 Test St".into()),
+        billing_city: Some("Denver".into()),
+        billing_state: Some("CO".into()),
+        billing_state_id: Some(6),
+        billing_postal_code: Some("80202".into()),
+        billing_country_id: Some(1),
+        ..Default::default()
+    }))
+    .await
+    .unwrap();
+    assert_eq!(
+        mock.calls()[0],
+        svec([
+            "--profile",
+            "sandbox",
+            "--output",
+            "json",
+            "transactions",
+            "sale",
+            "--amount",
+            "10.00",
+            "--card",
+            "4111111111111111",
+            "--billing-line1",
+            "123 Test St",
+            "--billing-city",
+            "Denver",
+            "--billing-state",
+            "CO",
+            "--billing-state-id",
+            "6",
+            "--billing-postal-code",
+            "80202",
+            "--billing-country-id",
+            "1",
+        ])
+    );
+}
+
+/// `auth` shares the sale flag set, and an address-free call must stay
+/// byte-identical to the pre-4706 argv (no empty `--billing-*` flags).
+#[tokio::test]
+async fn transactions_auth_omits_billing_flags_when_unset() {
+    let (srv, mock) = sandbox(1);
+    srv.transactions_auth(Parameters(SaleArgs {
+        amount: "5.00".into(),
+        billing_city: Some("Denver".into()),
+        ..Default::default()
+    }))
+    .await
+    .unwrap();
+    assert_eq!(
+        mock.calls()[0],
+        svec([
+            "--profile",
+            "sandbox",
+            "--output",
+            "json",
+            "transactions",
+            "auth",
+            "--amount",
+            "5.00",
+            "--billing-city",
+            "Denver",
         ])
     );
 }
@@ -345,6 +474,71 @@ async fn customers_argv() {
             "c1",
             "m9",
             "--yes"
+        ])
+    );
+}
+
+/// ARISE-4706: create/update carry the same billing vocabulary through to the
+/// customer's `billingAddress`.
+#[tokio::test]
+async fn customers_create_and_update_forward_billing_address() {
+    let (srv, mock) = sandbox(2);
+    srv.customers_create(Parameters(CustomerFields {
+        first_name: Some("Ann".into()),
+        billing_line1: Some("1 Main St".into()),
+        billing_line2: Some("Suite 2".into()),
+        billing_city: Some("Denver".into()),
+        billing_country_id: Some(1),
+        ..Default::default()
+    }))
+    .await
+    .unwrap();
+    srv.customers_update(Parameters(CustomerUpdate {
+        id: "c1".into(),
+        fields: CustomerFields {
+            billing_postal_code: Some("80202".into()),
+            billing_state_id: Some(6),
+            ..Default::default()
+        },
+    }))
+    .await
+    .unwrap();
+    let c = mock.calls();
+    assert_eq!(
+        c[0],
+        svec([
+            "--profile",
+            "sandbox",
+            "--output",
+            "json",
+            "customers",
+            "create",
+            "--first-name",
+            "Ann",
+            "--billing-line1",
+            "1 Main St",
+            "--billing-line2",
+            "Suite 2",
+            "--billing-city",
+            "Denver",
+            "--billing-country-id",
+            "1",
+        ])
+    );
+    assert_eq!(
+        c[1],
+        svec([
+            "--profile",
+            "sandbox",
+            "--output",
+            "json",
+            "customers",
+            "update",
+            "c1",
+            "--billing-state-id",
+            "6",
+            "--billing-postal-code",
+            "80202",
         ])
     );
 }
@@ -737,12 +931,12 @@ async fn settlements_and_subscriptions_argv() {
     );
 }
 
-use flute_cli_mcp::tools::tokens::{TokenCreate, TokenRevoke};
+use flute_cli_mcp::tools::keys::{KeyCreate, KeyRevoke};
 
 #[tokio::test]
-async fn tokens_create_uses_per_call_merchant_id() {
+async fn keys_create_uses_per_call_merchant_id() {
     let (srv, mock) = sandbox(1);
-    srv.tokens_create(Parameters(TokenCreate {
+    srv.keys_create(Parameters(KeyCreate {
         name: "ci".into(),
         merchant_id: Some("m-1".into()),
     }))
@@ -755,7 +949,7 @@ async fn tokens_create_uses_per_call_merchant_id() {
             "sandbox",
             "--output",
             "json",
-            "tokens",
+            "keys",
             "create",
             "--merchant-id",
             "m-1",
@@ -766,10 +960,10 @@ async fn tokens_create_uses_per_call_merchant_id() {
 }
 
 #[tokio::test]
-async fn tokens_create_falls_back_to_pinned_merchant_id() {
+async fn keys_create_falls_back_to_pinned_merchant_id() {
     let mock = MockRunner::new(vec![Ok(json!({"object":"api_token"}))]);
     let srv = FluteServer::new(cfg(Profile::Sandbox, false, Some("m-pinned")), mock.clone());
-    srv.tokens_create(Parameters(TokenCreate {
+    srv.keys_create(Parameters(KeyCreate {
         name: "ci".into(),
         merchant_id: None,
     }))
@@ -782,7 +976,7 @@ async fn tokens_create_falls_back_to_pinned_merchant_id() {
             "sandbox",
             "--output",
             "json",
-            "tokens",
+            "keys",
             "create",
             "--merchant-id",
             "m-pinned",
@@ -793,11 +987,11 @@ async fn tokens_create_falls_back_to_pinned_merchant_id() {
 }
 
 #[tokio::test]
-async fn tokens_create_errors_without_any_merchant_id() {
+async fn keys_create_errors_without_any_merchant_id() {
     let mock = MockRunner::new(vec![]); // CLI must never be called
     let srv = FluteServer::new(cfg(Profile::Sandbox, false, None), mock.clone());
     let res = srv
-        .tokens_create(Parameters(TokenCreate {
+        .keys_create(Parameters(KeyCreate {
             name: "ci".into(),
             merchant_id: None,
         }))
@@ -808,9 +1002,9 @@ async fn tokens_create_errors_without_any_merchant_id() {
 }
 
 #[tokio::test]
-async fn tokens_revoke_argv() {
+async fn keys_revoke_argv() {
     let (srv, mock) = sandbox(1);
-    srv.tokens_revoke(Parameters(TokenRevoke {
+    srv.keys_revoke(Parameters(KeyRevoke {
         client_id: "cid-1".into(),
         merchant_id: Some("m-1".into()),
     }))
@@ -823,7 +1017,7 @@ async fn tokens_revoke_argv() {
             "sandbox",
             "--output",
             "json",
-            "tokens",
+            "keys",
             "revoke",
             "--client-id",
             "cid-1",
@@ -882,7 +1076,7 @@ async fn production_blocks_a_write_in_every_group() {
         }))
         .await
         .unwrap(),
-        srv.tokens_create(Parameters(TokenCreate {
+        srv.keys_create(Parameters(KeyCreate {
             name: "n".into(),
             merchant_id: Some("m1".into()),
         }))
@@ -951,11 +1145,6 @@ async fn page_is_forwarded_verbatim_zero_based() {
 /// instead of handing back a bare `null`.
 #[tokio::test]
 async fn empty_success_synthesizes_structured_envelope() {
-    fn body(res: &rmcp::model::CallToolResult) -> serde_json::Value {
-        let v = serde_json::to_value(res).unwrap();
-        serde_json::from_str(v["content"][0]["text"].as_str().unwrap()).unwrap()
-    }
-
     let mock = MockRunner::new(vec![
         Ok(serde_json::Value::Null),
         Ok(serde_json::Value::Null),
@@ -975,7 +1164,7 @@ async fn empty_success_synthesizes_structured_envelope() {
         .await
         .unwrap();
     let rev = srv
-        .tokens_revoke(Parameters(TokenRevoke {
+        .keys_revoke(Parameters(KeyRevoke {
             client_id: "cid1".into(),
             merchant_id: Some("m1".into()),
         }))

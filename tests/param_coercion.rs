@@ -5,8 +5,9 @@
 //! strings must still be rejected, and native numbers must keep working.
 
 use flute_cli_mcp::tools::ach::AchMove;
+use flute_cli_mcp::tools::customers::CustomerFields;
 use flute_cli_mcp::tools::subscriptions::SubscriptionCreate;
-use flute_cli_mcp::tools::transactions::TransactionsList;
+use flute_cli_mcp::tools::transactions::{SaleArgs, TransactionsList};
 use serde_json::json;
 
 #[test]
@@ -87,4 +88,46 @@ fn ach_move_accepts_string_billing_state_id() {
     .expect("stringified numerics must deserialize");
     assert_eq!(p.billing_state_id, 6);
     assert_eq!(p.billing_country_id, Some(1));
+}
+
+// ARISE-4706: the AVS billing fields added to card sale/auth and to customers
+// carry the same string-numeric hazard as the ACH ones.
+#[test]
+fn sale_args_accept_string_billing_numerics() {
+    let p: SaleArgs = serde_json::from_value(json!({
+        "amount": "10.00",
+        "billing_city": "Denver",
+        "billing_state_id": "6",
+        "billing_country_id": "1"
+    }))
+    .expect("stringified numerics must deserialize");
+    assert_eq!(p.billing_state_id, Some(6));
+    assert_eq!(p.billing_country_id, Some(1));
+}
+
+#[test]
+fn customer_fields_accept_string_billing_numerics() {
+    let p: CustomerFields = serde_json::from_value(json!({
+        "first_name": "Ann",
+        "billing_state_id": "6",
+        "billing_country_id": 1
+    }))
+    .expect("stringified and native numerics must both deserialize");
+    assert_eq!(p.billing_state_id, Some(6));
+    assert_eq!(p.billing_country_id, Some(1));
+}
+
+/// The billing fields must stay strictly validated: a misspelled param has to
+/// fail loudly, because a silently dropped billing address is what causes the
+/// AVS decline these fields exist to prevent.
+#[test]
+fn sale_args_reject_misspelled_billing_field() {
+    let r = serde_json::from_value::<SaleArgs>(json!({
+        "amount": "10.00",
+        "billing_zip": "80202"
+    }));
+    assert!(
+        r.is_err(),
+        "an unknown billing_* field must be rejected, not silently dropped"
+    );
 }
