@@ -12,3 +12,11 @@ hosting = "github"
 install-updater = false
 pr-run-mode = "skip"
 allow-dirty = []
+
+# Homebrew tap to publish the formula to on every release. Listing "homebrew"
+# in `installers` above only generates the .rb and attaches it to the GitHub
+# release — without these two keys cargo-dist has nowhere to push it, so
+# `brew install getflute/flute-cli-mcp/flute-cli-mcp` fails at tap time. The
+# publish job authenticates to the tap with the HOMEBREW_TAP_TOKEN secret.
+tap = "getflute/homebrew-flute-cli-mcp"
+publish-jobs = ["homebrew"]
