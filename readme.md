@@ -90,7 +90,9 @@ Reads are always allowed. On a guarded production instance, every write (anythin
 
 **Pagination is zero-based.** On the list tools (`transactions_list`, `customers_list`, `settlements_list`, `subscriptions_list`, `pos_list`), `page: 0` — or omitting `page` — returns the first page, `page: 1` the second, and so on; `limit` maps to the API page size. The MCP forwards `page` to the CLI/API verbatim (no offset). A nonzero `total` with an empty results list usually means the requested `page` is past the last page.
 
-Excluded by design: `auth login/logout/switch` (interactive/local-state), `update` (operator-only), `completion` (shell-only), `pos create --wait` (poll `pos_get` instead).
+Excluded by design: `auth login/logout/switch` (interactive/local-state), `auth token` (**prints the raw bearer token** — exposing it as a tool would hand the credential to every connected agent; see Security), `update` (operator-only), `completion` (shell-only), `pos create --wait` (poll `pos_get` instead).
+
+These exclusions are deliberate, not gaps. Most of them also emit no JSON envelope on success (they print plain text, a shell script, or a bare token), so wrapping them would return unparseable output as well.
 
 ## Errors
 
@@ -108,6 +110,7 @@ This server is a thin wrapper around the `flute` CLI, which accepts sensitive va
 Other handling:
 
 - Credentials (`FLUTE_CLIENT_ID`/`FLUTE_CLIENT_SECRET`) are never read or logged by this server — they are simply inherited by the spawned `flute` process.
+- The CLI's `auth token` subcommand prints the current bearer token to stdout. It is **deliberately not exposed as a tool**: any agent that could call it would obtain a credential good for every other API call, bypassing this server's production write guard entirely. Do not add it.
 - `auth_status` returns only `{authenticated, profile}` plus `api_base_url`/`client_id`/`merchant_id` when the CLI reports them, never the secret. It is a **live** check — the CLI pings the API, so `authenticated` is true only when the stored credentials actually round-trip, and the call costs a network round-trip.
 - `keys_create` surfaces a one-shot `clientSecret` from the API response; capture and store it securely (the API never returns it again).
 - On a non-JSON CLI failure, the raw output embedded in a `bad_output` error is truncated to 4 KiB so a large or sensitive body can't be echoed back wholesale.
