@@ -23,7 +23,7 @@ irm https://github.com/getflute/flute-cli-mcp/releases/latest/download/flute-cli
 
 Or build from source: `cargo install --path .`
 
-Prereq: install `flute` **v1.1.0 or newer** (see [getflute/flute-cli](https://github.com/getflute/flute-cli)) and configure credentials (`flute auth login`, or env vars). The `keys_*` tools invoke `flute keys …`, which does not exist before v1.1.0.
+Prereq: install `flute` **v1.1.0 or newer** (see [getflute/flute-cli](https://github.com/getflute/flute-cli)) and configure credentials (`flute auth login`, or env vars). The `keys_*` tools invoke `flute keys …`, which does not exist before v1.1.0. Note where both binaries land — you need their absolute paths to configure a client (see [Binary paths](#binary-paths)).
 
 ## Run
 
@@ -31,30 +31,77 @@ Prereq: install `flute` **v1.1.0 or newer** (see [getflute/flute-cli](https://gi
 flute-cli-mcp        # talks JSON-RPC over stdio
 ```
 
+Two flags mirror the env vars, for a client that can set arguments more easily than an environment: `--binary <path>` (same as `FLUTE_BIN`) and `--profile <sandbox|production>` (same as `FLUTE_PROFILE`). The flag wins over the env var.
+
 ## Environment variables
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `FLUTE_PROFILE` | `sandbox` | `sandbox` or `production` (alias `prod`). Pinned at startup. |
-| `FLUTE_BIN` | resolved on `PATH` | Override the `flute` binary location. |
+| `FLUTE_BIN` | *(unset — falls back to a `PATH` lookup that usually fails under an MCP client; set it)* | Absolute path to the `flute` binary. See [Binary paths](#binary-paths). |
 | `FLUTE_MERCHANT_ID` | unset | Pinned ISV merchant id (`keys_*` tools; per-call `merchant_id` overrides). |
 | `FLUTE_MCP_TIMEOUT_SECS` | `30` | Per-call timeout for the child process. |
 | `FLUTE_MCP_DEBUG` | off | Set to `1`/`true`/`yes`/`on` to route `flute` stderr into this server's tracing. |
 | `FLUTE_MCP_ALLOW_PROD_WRITES` | off | Set to `1`/`true`/`yes`/`on` to lift the production write guard. Any other value (including `false`/`0`/empty) keeps it on. |
 | `RUST_LOG` | `info` | tracing filter. Logs go to *stderr* only. |
 
+## Binary paths
+
+**Assume neither binary is on the client's `PATH`, and configure both by absolute path.**
+
+Your MCP client spawns `flute-cli-mcp` directly as a child process — it does not run your login shell first. A client started from the macOS Dock, Windows Explorer, or an IDE inherits a minimal `PATH` (often just `/usr/bin:/bin:/usr/sbin:/sbin`) containing none of the directories your `.zshrc`/`.bashrc` or the installers add: `/usr/local/bin`, `/opt/homebrew/bin`, `~/.local/bin`. That `flute-cli-mcp` runs fine when *you* type it in a terminal proves nothing here — that `PATH` is your shell's, not the client's.
+
+Two separate lookups depend on this, and each fails differently:
+
+- **`command`** — the path the client uses to launch this server. If it can't be resolved, the server never starts and the client reports it as failed or disconnected, with nothing in this server's logs (there are none yet).
+- **`FLUTE_BIN`** — where this server finds the `flute` CLI. Left unset, it falls back to a `PATH` lookup for `flute`; when that misses, the server prints ``could not find `flute` on PATH`` to stderr and exits 2 **before serving a single request**, so this too surfaces as a dead server rather than a tool error.
+
+Get the real paths from your own shell:
+
+```bash
+# macOS / Linux
+command -v flute
+command -v flute-cli-mcp
+```
+
+```powershell
+# Windows (PowerShell)
+(Get-Command flute).Source
+(Get-Command flute-cli-mcp).Source
+```
+
+If those come up empty, the binary isn't installed for this user — install it first (above) rather than guessing a path. For reference, the installers put `flute-cli-mcp` in:
+
+| Installed via | Location |
+|---|---|
+| shell / PowerShell installer, `cargo install` | `~/.cargo/bin` (Windows: `%USERPROFILE%\.cargo\bin`) |
+| Homebrew, Apple Silicon | `/opt/homebrew/bin` |
+| Homebrew, Intel macOS / Linuxbrew | `/usr/local/bin`, `/home/linuxbrew/.linuxbrew/bin` |
+
+`FLUTE_BIN` must name the executable itself, not the directory holding it, and the file must be executable. Otherwise the server exits 2 at startup with ``configuration error: FLUTE_BIN=`…` does not exist or is not executable`` — checked at launch on purpose, so a bad path shows up immediately instead of on the first tool call. (A binary that disappears *after* startup fails per-call with `kind:"spawn"` instead.)
+
+Neither config format expands `~` or `$HOME` — write the path out in full. On Windows, escape the backslashes in JSON (`"C:\\Program Files\\flute\\flute.exe"`) or use a TOML literal string (`'C:\Program Files\flute\flute.exe'`), and include the `.exe`.
+
 ## Claude Desktop config
+
+Replace both `/path/to/…` placeholders with the absolute paths you found above.
 
 ```jsonc
 {
   "mcpServers": {
     "flute-sandbox": {
-      "command": "flute-cli-mcp",
-      "env": { "FLUTE_PROFILE": "sandbox" }
+      "command": "/path/to/mcp/flute-cli-mcp",
+      "env": {
+        "FLUTE_PROFILE": "sandbox",
+        "FLUTE_BIN": "/path/to/cli/flute"
+      }
     },
     "flute-prod-readonly": {
-      "command": "flute-cli-mcp",
-      "env": { "FLUTE_PROFILE": "production" }
+      "command": "/path/to/mcp/flute-cli-mcp",
+      "env": {
+        "FLUTE_PROFILE": "production",
+        "FLUTE_BIN": "/path/to/cli/flute"
+      }
     }
   }
 }
@@ -62,18 +109,20 @@ flute-cli-mcp        # talks JSON-RPC over stdio
 
 The `flute-prod-readonly` instance serves reads; production writes are refused unless you add `"FLUTE_MCP_ALLOW_PROD_WRITES": "1"`.
 
+If a server shows as failed, check the client's MCP logs for this server's stderr — on macOS, `~/Library/Logs/Claude/mcp-server-flute-sandbox.log`. A `could not find flute on PATH` line there means `FLUTE_BIN` is unset or wrong; no log file at all usually means `command` itself didn't resolve.
+
 ## Codex app config
 
-Codex stores MCP servers in `~/.codex/config.toml`. The Codex app, CLI, and IDE extension share this configuration.
+Codex stores MCP servers in `~/.codex/config.toml`. The Codex app, CLI, and IDE extension share this configuration — so even if you only ever launch `codex` from a shell that has both binaries on `PATH`, set the absolute paths anyway or the same config breaks under the app and the extension.
 
 ```toml
 [mcp_servers.flute-sandbox]
-command = "flute-cli-mcp"
-env = { FLUTE_PROFILE = "sandbox" }
+command = "/path/to/mcp/flute-cli-mcp"
+env = { FLUTE_PROFILE = "sandbox", FLUTE_BIN = "/path/to/cli/flute" }
 
 [mcp_servers.flute-prod-readonly]
-command = "flute-cli-mcp"
-env = { FLUTE_PROFILE = "production" }
+command = "/path/to/mcp/flute-cli-mcp"
+env = { FLUTE_PROFILE = "production", FLUTE_BIN = "/path/to/cli/flute" }
 ```
 
 The `flute-prod-readonly` instance serves reads; production writes are refused unless you add `FLUTE_MCP_ALLOW_PROD_WRITES = "1"` to its `env` table.
@@ -102,6 +151,8 @@ These exclusions are deliberate, not gaps. Most of them also emit no JSON envelo
 - **Error** (`isError: true`): a flat `{ "kind": …, "message": …, "status"?: …, "correlation_id"?: … }`. This intentionally matches the CLI's documented error contract so you can branch on `kind`/`status` — it is **not** wrapped in `object`/`data`/`meta`.
 
 So a deleted-then-fetched customer returns `isError: true` with `{kind:"api", status:404, …}` — that is the expected 404 shape, not a missing envelope. `kind` is one of `api`, `transport`, `auth`, `decode`, `client`, `spawn`, `timeout`, `bad_output`. Branch on `kind` first; `transport` and `api` with status ∈ {500,502,503,504} are safe to retry with backoff; `auth` means configure credentials on the operator's machine.
+
+Startup failures never reach this layer: a bad or missing `flute` path makes the process exit 2 with a plain stderr line, so the client sees a server that won't start. See [Binary paths](#binary-paths).
 
 ## Security
 
