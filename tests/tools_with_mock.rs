@@ -209,8 +209,8 @@ async fn transactions_sale_argv() {
     );
 }
 
-/// ARISE-4706: card sale/auth must forward the AVS billing address, otherwise
-/// AVS-sensitive processors decline the charge.
+/// ARISE-4706: card sale/auth must forward the AVS billing address; dropping
+/// its matched street or ZIP can cause an AVS-sensitive processor to decline.
 #[tokio::test]
 async fn transactions_sale_forwards_avs_billing_address() {
     let (srv, mock) = sandbox(1);

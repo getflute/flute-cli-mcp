@@ -118,8 +118,8 @@ fn customer_fields_accept_string_billing_numerics() {
 }
 
 /// The billing fields must stay strictly validated: a misspelled param has to
-/// fail loudly, because a silently dropped billing address is what causes the
-/// AVS decline these fields exist to prevent.
+/// fail loudly, because silently dropping an AVS-matched street or ZIP can
+/// remove AVS coverage and contribute to a decline.
 #[test]
 fn sale_args_reject_misspelled_billing_field() {
     let r = serde_json::from_value::<SaleArgs>(json!({

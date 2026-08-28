@@ -9,8 +9,8 @@
 //! The seven fields are declared inline on each tool's params struct rather
 //! than `#[serde(flatten)]`-ed in from here: `flatten` silently disables the
 //! `deny_unknown_fields` those structs rely on, which would turn a misspelled
-//! billing param into a dropped field — and a dropped billing address is
-//! exactly what makes an AVS-sensitive processor decline. Only the argv
+//! billing param into a dropped field, which can silently remove AVS coverage
+//! and contribute to an AVS-sensitive processor decline. Only the argv
 //! construction is shared.
 
 /// The seven AVS billing values pulled off a tool's params.

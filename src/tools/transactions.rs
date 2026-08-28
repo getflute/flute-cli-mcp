@@ -58,27 +58,36 @@ pub struct SaleArgs {
     pub reference_id: Option<String>,
 
     // AVS billing address (ARISE-4706). Sent as `billingAddress` only when at
-    // least one field is set. Omitting it can cause AVS-sensitive processors to
-    // decline the card, so supply at least city + country id for a live charge.
-    /// AVS billing street line 1.
+    // least one field is set. Only a street line and ZIP feed card AVS; city,
+    // state, and country are stored but not matched.
+    /// AVS billing street line 1 — the street value matched by AVS; pair it with
+    /// `billing_postal_code`.
     #[serde(default)]
     pub billing_line1: Option<String>,
-    /// AVS billing street line 2.
+    /// AVS billing street line 2 — the gateway's pre-sale AVS check falls back
+    /// to this when `billing_line1` is absent; processor authorization carries
+    /// line 1 only.
     #[serde(default)]
     pub billing_line2: Option<String>,
-    /// AVS billing city. The API requires city + country id once any billing field is set.
+    /// AVS billing city (optional; not matched by AVS and not required by the API).
     #[serde(default)]
     pub billing_city: Option<String>,
-    /// AVS billing state name, e.g. "CO".
+    /// AVS billing state name, e.g. "CO" (not matched by AVS).
     #[serde(default)]
     pub billing_state: Option<String>,
-    /// AVS billing numeric state id.
+    /// AVS billing numeric state id. With the default card data source 1
+    /// (Internet), it is checked against `billing_country_id` only when both
+    /// are supplied; card-present sources skip that check.
     #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub billing_state_id: Option<u32>,
-    /// AVS billing postal / ZIP code.
+    /// AVS billing postal / ZIP code — the other AVS-matched field. Optional
+    /// and length-checked when supplied: at least 5 characters for the default
+    /// card data source 1 (Internet), or 2 for card-present sources. Card data
+    /// source 7 (Manual) additionally requires ZIP when AVS is enabled.
     #[serde(default)]
     pub billing_postal_code: Option<String>,
-    /// AVS billing numeric country id; 1 = US.
+    /// AVS billing numeric country id; 1 = US. Optional and checked only with
+    /// `billing_state_id` under the default card data source 1 (Internet).
     #[serde(default, deserialize_with = "crate::tools::de_flexible_u32")]
     pub billing_country_id: Option<u32>,
 }
@@ -222,7 +231,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Charge a card. NOT idempotent — each call moves money. Use a unique reference_id for server-side duplicate control; reconcile with transactions_list before retrying. Supply the billing_* AVS fields (at least billing_city + billing_country_id) — AVS-sensitive processors decline charges sent without a billing address. The response's top-level `avsResponse` reports the address check as an object (null when AVS is off for the merchant/processor): `{responseCode, action, group, result, codeDescription, …}`. It is ADVISORY — an Approved charge can still carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Never treat a failed AVS result as a failed charge and never retry on it; read `status`/`responseDescription` for whether money moved."
+        description = "Charge a card. NOT idempotent — each call moves money. Use a unique reference_id for server-side duplicate control; reconcile with transactions_list before retrying. For AVS coverage, supply billing_line1 + billing_postal_code; billing_line2 is a pre-sale fallback when line 1 is absent, while city, state, and country are not matched. Billing fields are optional, but omitting the address can cause an AVS-sensitive processor to decline. The response's top-level `avsResponse` reports the address check as an object (null when AVS is off for the merchant/processor): `{responseCode, action, group, result, codeDescription, …}`. It is ADVISORY — an Approved charge can still carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Never treat a failed AVS result as a failed charge and never retry on it; read `status`/`responseDescription` for whether money moved."
     )]
     pub async fn transactions_sale(
         &self,
@@ -239,7 +248,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Authorize (hold) a card without capturing. NOT idempotent. Capture later with transactions_capture. Supply the billing_* AVS fields (at least billing_city + billing_country_id) — AVS-sensitive processors decline authorizations sent without a billing address. The response's top-level `avsResponse` reports the address check as an object (null when AVS is off for the merchant/processor). It is ADVISORY — an Approved authorization can still carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Never treat a failed AVS result as a failed authorization and never retry on it; read `status`/`responseDescription` instead."
+        description = "Authorize (hold) a card without capturing. NOT idempotent. Capture later with transactions_capture. For AVS coverage, supply billing_line1 + billing_postal_code; billing_line2 is a pre-sale fallback when line 1 is absent, while city, state, and country are not matched. Billing fields are optional, but omitting the address can cause an AVS-sensitive processor to decline. The response's top-level `avsResponse` reports the address check as an object (null when AVS is off for the merchant/processor). It is ADVISORY — an Approved authorization can still carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Never treat a failed AVS result as a failed authorization and never retry on it; read `status`/`responseDescription` instead."
     )]
     pub async fn transactions_auth(
         &self,
