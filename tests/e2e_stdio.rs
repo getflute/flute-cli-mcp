@@ -84,19 +84,41 @@ fn lists_all_tools_and_calls_a_read() {
     let tools = listed["result"]["tools"].as_array().expect("tools array");
     assert_eq!(tools.len(), 47, "expected 47 tools, got {}", tools.len());
 
-    // The money-moving tools must keep warning that `avsResponse` is advisory:
-    // an Approved charge can carry `result:"Failed"`, and an agent that reads
-    // that as a decline and retries will double-charge. Guard the warning so it
-    // can't be dropped in a future description edit.
+    // Keep both parts of the card-AVS guidance in the exposed tool metadata:
+    // recommend the fields AVS actually matches, and warn that `avsResponse`
+    // is advisory so an agent does not retry an Approved charge and double-charge.
     for name in ["transactions_sale", "transactions_auth"] {
-        let desc = tools
+        let tool = tools
             .iter()
             .find(|t| t["name"] == name)
-            .and_then(|t| t["description"].as_str())
             .unwrap_or_else(|| panic!("{name} missing from tools/list"));
+        let desc = tool["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name} description missing"));
         assert!(
             desc.contains("avsResponse") && desc.contains("never retry"),
             "{name} description must warn that avsResponse is advisory and must not be retried on"
+        );
+        assert!(
+            desc.contains("billing_line1 + billing_postal_code")
+                && !desc.contains("billing_city + billing_country_id"),
+            "{name} description must recommend AVS-matched street + ZIP, not city + country"
+        );
+
+        let properties = &tool["inputSchema"]["properties"];
+        let city_desc = properties["billing_city"]["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name} billing_city description missing"));
+        let postal_desc = properties["billing_postal_code"]["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name} billing_postal_code description missing"));
+        assert!(
+            city_desc.contains("not matched by AVS"),
+            "{name} billing_city must be documented as not AVS-matched"
+        );
+        assert!(
+            postal_desc.contains("Manual") && postal_desc.contains("requires ZIP"),
+            "{name} billing_postal_code must document the Manual+AVS requirement"
         );
     }
 
