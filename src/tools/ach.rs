@@ -117,7 +117,9 @@ impl FluteServer {
         })
     }
 
-    #[tool(description = "Void an ACH transaction by id. 404 on repeat = idempotent.")]
+    #[tool(
+        description = "Void an ACH transaction by id. NOT idempotent: a repeat surfaces the server error, so reconcile with transactions_get/list before retrying."
+    )]
     pub async fn ach_void(
         &self,
         Parameters(p): Parameters<Id>,
