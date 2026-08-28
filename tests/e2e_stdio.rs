@@ -120,6 +120,66 @@ fn lists_all_tools_and_calls_a_read() {
             postal_desc.contains("Manual") && postal_desc.contains("requires ZIP"),
             "{name} billing_postal_code must document the Manual+AVS requirement"
         );
+        assert!(
+            desc.contains("data.processedAmount")
+                && desc.contains("data.transactionReceipt.responseDescription")
+                && desc.contains("data.status"),
+            "{name} description must document the POST transaction response shape"
+        );
+    }
+
+    for name in ["transactions_get", "transactions_inspect"] {
+        let desc = tools
+            .iter()
+            .find(|t| t["name"] == name)
+            .and_then(|t| t["description"].as_str())
+            .unwrap_or_else(|| panic!("{name} description missing"));
+        assert!(
+            desc.contains("data.amount.totalAmount")
+                && desc.contains("data.authCode")
+                && desc.contains("data.responseDescription"),
+            "{name} description must document the GET/receipt response shape"
+        );
+    }
+
+    // Mutation responses use the nested POST shape rather than the GET/receipt
+    // shape, so agents must not look for amount or response text at data.*.
+    for name in [
+        "transactions_capture",
+        "transactions_void",
+        "transactions_refund",
+        "transactions_tip_adjust",
+    ] {
+        let desc = tools
+            .iter()
+            .find(|t| t["name"] == name)
+            .and_then(|t| t["description"].as_str())
+            .unwrap_or_else(|| panic!("{name} description missing"));
+        assert!(
+            desc.contains("data.transactionReceipt.amount.totalAmount")
+                && desc.contains("data.transactionReceipt.responseDescription")
+                && desc.contains("data.status"),
+            "{name} description must document the POST transaction response shape"
+        );
+    }
+
+    // These operations surface a repeat error; describing them as idempotent
+    // can make an agent retry instead of reconciling current state first.
+    for name in [
+        "transactions_void",
+        "ach_void",
+        "pos_cancel",
+        "subscriptions_terminate",
+    ] {
+        let desc = tools
+            .iter()
+            .find(|t| t["name"] == name)
+            .and_then(|t| t["description"].as_str())
+            .unwrap_or_else(|| panic!("{name} description missing"));
+        assert!(
+            desc.contains("NOT idempotent") && !desc.contains("404 on repeat"),
+            "{name} must not tell agents that a repeat is idempotent"
+        );
     }
 
     // tools/call ping — fake returns success JSON.

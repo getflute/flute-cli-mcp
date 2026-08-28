@@ -138,7 +138,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Cancel an in-progress POS transaction by id. 404 on repeat = idempotent."
+        description = "Cancel an in-progress POS transaction by id. NOT idempotent: a repeat surfaces the server error, so check pos_get before retrying."
     )]
     pub async fn pos_cancel(
         &self,

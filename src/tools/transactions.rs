@@ -201,7 +201,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Get one transaction by id. Safe to retry. The AVS result lives in the TOP-LEVEL `avsResponse` object (null when AVS is off) — `transactionReceipt.avsResponse` may be null even when the top-level one is populated, so read the top-level field. It is advisory: `result: \"Failed\"` does not mean the transaction failed."
+        description = "Get one transaction by id. Safe to retry. This GET returns the receipt-shaped `data`: read amount from `data.amount.totalAmount`, authorization code from `data.authCode`, and response text from `data.responseDescription`. The AVS result lives in `data.avsResponse` (null when AVS is off); it is advisory, so `result: \"Failed\"` does not mean the transaction failed."
     )]
     pub async fn transactions_get(
         &self,
@@ -216,7 +216,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Rich client-composed view of a transaction: its current `status` (e.g. \"Voided\") plus `availableOperations`. Note `transactionType` reflects the ORIGINAL type (e.g. \"Sale\") even after a void/refund — determine current state from `status`/`availableOperations`, not `transactionType`. The AVS result is the TOP-LEVEL `avsResponse` object — `{responseCode, action, group, result, codeDescription, …}`, or null when AVS is off; `transactionReceipt.avsResponse` may be null even when it is populated. It is advisory and independent of the outcome: an Approved transaction can carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Safe to retry."
+        description = "Rich client-composed view of a transaction. Safe to retry. Its receipt-shaped `data` has `data.amount.totalAmount`, `data.authCode`, and `data.responseDescription` at the top level. Determine current state from `data.status` and `data.availableOperations`, not `transactionType`, which reflects the ORIGINAL type even after a void/refund. The AVS result is `data.avsResponse` — `{responseCode, action, group, result, codeDescription, …}`, or null when AVS is off. It is advisory and independent of the outcome: an Approved transaction can carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\"."
     )]
     pub async fn transactions_inspect(
         &self,
@@ -231,7 +231,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Charge a card. NOT idempotent — each call moves money. Use a unique reference_id for server-side duplicate control; reconcile with transactions_list before retrying. For AVS coverage, supply billing_line1 + billing_postal_code; billing_line2 is a pre-sale fallback when line 1 is absent, while city, state, and country are not matched. Billing fields are optional, but omitting the address can cause an AVS-sensitive processor to decline. The response's top-level `avsResponse` reports the address check as an object (null when AVS is off for the merchant/processor): `{responseCode, action, group, result, codeDescription, …}`. It is ADVISORY — an Approved charge can still carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Never treat a failed AVS result as a failed charge and never retry on it; read `status`/`responseDescription` for whether money moved."
+        description = "Charge a card. NOT idempotent — each call moves money. Use a unique reference_id for server-side duplicate control; reconcile with transactions_list before retrying. For AVS coverage, supply billing_line1 + billing_postal_code; billing_line2 is a pre-sale fallback when line 1 is absent, while city, state, and country are not matched. Billing fields are optional, but omitting the address can cause an AVS-sensitive processor to decline. The POST response has `data.status`, `data.processedAmount`, `data.details`, and `data.transactionReceipt`; it has no top-level `data.responseDescription`. Amount is `data.processedAmount` (or `data.transactionReceipt.amount.totalAmount`), response text is `data.transactionReceipt.responseDescription` (or `data.details.hostResponseMessage`/`data.details.message`), and auth code is `data.transactionReceipt.authCode` or `data.details.authCode`. The top-level `data.avsResponse` is ADVISORY — an Approved charge can still carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Never treat failed AVS as a failed charge and never retry on it; use `data.status` for whether money moved."
     )]
     pub async fn transactions_sale(
         &self,
@@ -248,7 +248,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Authorize (hold) a card without capturing. NOT idempotent. Capture later with transactions_capture. For AVS coverage, supply billing_line1 + billing_postal_code; billing_line2 is a pre-sale fallback when line 1 is absent, while city, state, and country are not matched. Billing fields are optional, but omitting the address can cause an AVS-sensitive processor to decline. The response's top-level `avsResponse` reports the address check as an object (null when AVS is off for the merchant/processor). It is ADVISORY — an Approved authorization can still carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Never treat a failed AVS result as a failed authorization and never retry on it; read `status`/`responseDescription` instead."
+        description = "Authorize (hold) a card without capturing. NOT idempotent. Capture later with transactions_capture. For AVS coverage, supply billing_line1 + billing_postal_code; billing_line2 is a pre-sale fallback when line 1 is absent, while city, state, and country are not matched. Billing fields are optional, but omitting the address can cause an AVS-sensitive processor to decline. The POST response has `data.status`, `data.processedAmount`, `data.details`, and `data.transactionReceipt`; it has no top-level `data.responseDescription`. Amount is `data.processedAmount` (or `data.transactionReceipt.amount.totalAmount`), response text is `data.transactionReceipt.responseDescription` (or `data.details.hostResponseMessage`/`data.details.message`), and auth code is `data.transactionReceipt.authCode` or `data.details.authCode`. The top-level `data.avsResponse` is ADVISORY — an Approved authorization can still carry `result: \"Failed\"` when the merchant's AVS action is \"Allow\". Never treat failed AVS as a failed authorization and never retry on it; use `data.status` for the outcome."
     )]
     pub async fn transactions_auth(
         &self,
@@ -264,7 +264,9 @@ impl FluteServer {
         })
     }
 
-    #[tool(description = "Capture a prior authorization. NOT idempotent. Optional partial amount.")]
+    #[tool(
+        description = "Capture a prior authorization. NOT idempotent. Optional partial amount. This POST returns `data.status`, `data.details`, and `data.transactionReceipt`, with no `processedAmount`: amount is `data.transactionReceipt.amount.totalAmount`, auth code is `data.transactionReceipt.authCode` or `data.details.authCode`, and response text is `data.transactionReceipt.responseDescription` or `data.details.hostResponseMessage`/`data.details.message`."
+    )]
     pub async fn transactions_capture(
         &self,
         Parameters(p): Parameters<TxnRef>,
@@ -289,7 +291,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Void a transaction. The void is recorded as a separate operation (response `type: \"Void\"`); the original transaction keeps its `transactionType` (e.g. \"Sale\") and its `status` becomes \"Voided\" — so a later inspect showing transactionType \"Sale\" with status \"Voided\" is correct, not a lost void. 404 on repeat = already voided (idempotent)."
+        description = "Void a transaction. NOT idempotent: a repeat surfaces the server error, so reconcile with transactions_get/inspect before retrying. The response has `data.type: \"Void\"`; the original transaction keeps its `transactionType` and its status becomes \"Voided\". This POST returns `data.status`, `data.details`, and `data.transactionReceipt`: amount is `data.transactionReceipt.amount.totalAmount`, auth code is `data.transactionReceipt.authCode` or `data.details.authCode`, and response text is `data.transactionReceipt.responseDescription` or `data.details.hostResponseMessage`/`data.details.message`."
     )]
     pub async fn transactions_void(
         &self,
@@ -312,7 +314,7 @@ impl FluteServer {
     }
 
     #[tool(
-        description = "Refund a transaction. NOT idempotent — moves money. Optional partial amount."
+        description = "Refund a transaction. NOT idempotent — moves money. Optional partial amount. This POST returns `data.status`, `data.details`, and `data.transactionReceipt`: amount is `data.transactionReceipt.amount.totalAmount`, auth code is `data.transactionReceipt.authCode` or `data.details.authCode`, and response text is `data.transactionReceipt.responseDescription` or `data.details.hostResponseMessage`/`data.details.message`."
     )]
     pub async fn transactions_refund(
         &self,
@@ -360,7 +362,9 @@ impl FluteServer {
         })
     }
 
-    #[tool(description = "Adjust the tip on a transaction. NOT idempotent.")]
+    #[tool(
+        description = "Adjust the tip on a transaction. NOT idempotent. This POST returns `data.status`, `data.details`, and `data.transactionReceipt`: amount is `data.transactionReceipt.amount.totalAmount`, auth code is `data.transactionReceipt.authCode` or `data.details.authCode`, and response text is `data.transactionReceipt.responseDescription` or `data.details.hostResponseMessage`/`data.details.message`."
+    )]
     pub async fn transactions_tip_adjust(
         &self,
         Parameters(p): Parameters<TipAdjust>,

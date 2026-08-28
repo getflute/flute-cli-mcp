@@ -170,7 +170,9 @@ impl FluteServer {
         })
     }
 
-    #[tool(description = "Terminate a subscription. 404 on repeat = idempotent.")]
+    #[tool(
+        description = "Terminate a subscription. NOT idempotent: an already-terminated subscription returns an error, so check subscriptions_get before retrying."
+    )]
     pub async fn subscriptions_terminate(
         &self,
         Parameters(p): Parameters<Id>,
