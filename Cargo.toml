@@ -1,6 +1,6 @@
 [package]
 name = "flute-cli-mcp"
-version = "0.2.3"
+version = "1.0.0"
 edition = "2024"
 description = "MCP server that drives the flute payments CLI"
 license = "MIT"
