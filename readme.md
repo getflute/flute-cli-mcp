@@ -23,15 +23,7 @@ irm https://github.com/getflute/flute-cli-mcp/releases/latest/download/flute-cli
 
 Or build from source: `cargo install --path .`
 
-Prereq: install `flute` **v1.1.0 or newer** (see [getflute/flute-cli](https://github.com/getflute/flute-cli)) and configure credentials (`flute auth login`, or env vars). The `keys_*` tools invoke `flute keys …`, which does not exist before v1.1.0. Note where both binaries land — you need their absolute paths to configure a client (see [Binary paths](#binary-paths)).
-
-## Run
-
-```bash
-flute-cli-mcp        # talks JSON-RPC over stdio
-```
-
-Two flags mirror the env vars, for a client that can set arguments more easily than an environment: `--binary <path>` (same as `FLUTE_BIN`) and `--profile <sandbox|production>` (same as `FLUTE_PROFILE`). The flag wins over the env var.
+Prereq: install the **latest `flute`** release (see [getflute/flute-cli](https://github.com/getflute/flute-cli)) and configure credentials (`flute auth login`, or env vars). The `keys_*` tools invoke `flute keys …`, which older releases do not have. Note where both binaries land — you need their absolute paths to configure a client (see [Binary paths](#binary-paths)).
 
 ## Environment variables
 
@@ -44,6 +36,8 @@ Two flags mirror the env vars, for a client that can set arguments more easily t
 | `FLUTE_MCP_DEBUG` | off | Set to `1`/`true`/`yes`/`on` to route `flute` stderr into this server's tracing. |
 | `FLUTE_MCP_ALLOW_PROD_WRITES` | off | Set to `1`/`true`/`yes`/`on` to lift the production write guard. Any other value (including `false`/`0`/empty) keeps it on. |
 | `RUST_LOG` | `info` | tracing filter. Logs go to *stderr* only. |
+
+Two flags mirror the env vars, for a client that can set arguments more easily than an environment: `--binary <path>` (same as `FLUTE_BIN`) and `--profile <sandbox|production>` (same as `FLUTE_PROFILE`). The flag wins over the env var.
 
 ## Binary paths
 
