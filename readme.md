@@ -10,18 +10,29 @@ The active profile is **pinned at startup** — run one instance per environment
 
 ## Install
 
-```bash
-# macOS / Linux (curl + sh)
-curl -LsSf https://github.com/getflute/flute-cli-mcp/releases/latest/download/flute-cli-mcp-installer.sh | sh
+**Homebrew (Apple Silicon macOS / x86_64 Linux)**
 
-# macOS / Linux (Homebrew)
+```sh
 brew install getflute/flute-cli-mcp/flute-cli-mcp
-
-# Windows (PowerShell)
-irm https://github.com/getflute/flute-cli-mcp/releases/latest/download/flute-cli-mcp-installer.ps1 | iex
 ```
 
-Or build from source: `cargo install --path .`
+**Shell script (Apple Silicon macOS / x86_64 Linux — installs from GitHub Releases)**
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/getflute/flute-cli-mcp/releases/latest/download/flute-cli-mcp-installer.sh | sh
+```
+
+**PowerShell (x86_64 Windows — installs from GitHub Releases)**
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/getflute/flute-cli-mcp/releases/latest/download/flute-cli-mcp-installer.ps1 | iex"
+```
+
+**From source**
+
+```sh
+cargo install --path .
+```
 
 Prereq: install the **latest `flute`** release (see [getflute/flute-cli](https://github.com/getflute/flute-cli)) and configure credentials (`flute auth login`, or env vars). The `keys_*` tools invoke `flute keys …`, which older releases do not have. Note where both binaries land — you need their absolute paths to configure a client (see [Binary paths](#binary-paths)).
 
