@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use rmcp::{
-    ServerHandler, handler::server::router::tool::ToolRouter, model::ServerInfo, tool_handler,
+    ServerHandler,
+    handler::server::router::tool::ToolRouter,
+    model::{Implementation, ServerCapabilities, ServerInfo},
+    tool_handler,
 };
 use serde_json::Value;
 
@@ -83,12 +86,20 @@ impl FluteServer {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for FluteServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo::default().with_instructions(
-            "Drives the `flute` payments CLI. The active profile is pinned at server start; \
+        // Not `ServerInfo::default()`: that fills `serverInfo` from rmcp's own
+        // build env (reporting `rmcp` + the SDK version) and advertises no
+        // capabilities, so clients never learn this server offers tools.
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(Implementation::new(
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+            ))
+            .with_instructions(
+                "Drives the `flute` payments CLI. The active profile is pinned at server start; \
              launch one instance per environment (sandbox vs production). On a production \
              instance, write tools are refused unless FLUTE_MCP_ALLOW_PROD_WRITES=1. \
              Credentials come from the OS keychain (`flute auth login`) or FLUTE_CLIENT_ID/\
              FLUTE_CLIENT_SECRET in this server's environment.",
-        )
+            )
     }
 }

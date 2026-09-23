@@ -61,6 +61,16 @@ fn handshake(stdin: &mut impl Write, reader: &mut BufReader<impl std::io::Read>)
     let init = read_one_frame(reader);
     assert_eq!(init["id"], 1);
     assert!(init["result"].is_object());
+    // Identify as this crate (not the rmcp SDK) and advertise the tools capability.
+    assert_eq!(init["result"]["serverInfo"]["name"], "flute-cli-mcp");
+    assert_eq!(
+        init["result"]["serverInfo"]["version"],
+        env!("CARGO_PKG_VERSION")
+    );
+    assert!(
+        init["result"]["capabilities"]["tools"].is_object(),
+        "initialize must advertise the tools capability: {init}"
+    );
     stdin
         .write_all(jsonrpc_notify("notifications/initialized", json!({})).as_bytes())
         .unwrap();
