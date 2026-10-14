@@ -34,6 +34,8 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/getflute/flute-cli
 cargo install --path .
 ```
 
+This builds with Rust 1.99.0, pinned in `rust-toolchain.toml`; rustup installs it automatically the first time.
+
 Prereq: install the **latest `flute`** release (see [getflute/flute-cli](https://github.com/getflute/flute-cli)) and configure credentials (`flute auth login`, or env vars). The `keys_*` tools invoke `flute keys …`, which older releases do not have. Note where both binaries land — you need their absolute paths to configure a client (see [Binary paths](#binary-paths)).
 
 ## Automatic configuration
